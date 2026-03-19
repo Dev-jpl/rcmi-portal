@@ -7,6 +7,7 @@ import NotificationBell from '@/components/common/NotificationBell.vue'
 const auth = useAuthStore()
 const router = useRouter()
 const sidebarOpen = ref(false)
+const showUserMenu = ref(false)
 
 const icons = {
     dashboard: `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zm0 9.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zm9.75-9.75A2.25 2.25 0 0115.75 3.75H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zm0 9.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25a2.25 2.25 0 01-2.25-2.25v-2.25z"/>`,
@@ -118,12 +119,54 @@ async function handleLogout() {
                 </div>
             </nav>
 
-            <!-- Divider -->
-            <div class="mx-4 border-t border-white/[0.08]" />
+            <!-- User footer (sticky bottom) -->
+            <div class="shrink-0 border-t border-white/8 px-3 py-3 relative">
+                <!-- User menu popup -->
+                <Transition
+                    enter-active-class="transition duration-150 ease-out"
+                    enter-from-class="opacity-0 translate-y-2 scale-95"
+                    enter-to-class="opacity-100 translate-y-0 scale-100"
+                    leave-active-class="transition duration-100 ease-in"
+                    leave-from-class="opacity-100 translate-y-0 scale-100"
+                    leave-to-class="opacity-0 translate-y-2 scale-95"
+                >
+                    <div
+                        v-if="showUserMenu"
+                        class="absolute bottom-full left-3 right-3 mb-2 bg-[#0d1a3a] rounded-2xl border border-white/10 shadow-xl shadow-black/30 overflow-hidden"
+                    >
+                        <div class="px-4 py-3 border-b border-white/8">
+                            <p class="text-xs text-white/40 truncate">{{ auth.user?.email }}</p>
+                            <p class="text-[10px] text-gold/70 capitalize mt-0.5">{{ auth.roleType }}</p>
+                        </div>
+                        <div class="py-1.5">
+                            <router-link
+                                :to="{ name: 'member-dashboard' }"
+                                class="flex items-center gap-3 px-4 py-2.5 text-sm text-white/60 hover:text-white hover:bg-white/6 transition-colors"
+                                @click="showUserMenu = false"
+                            >
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" />
+                                </svg>
+                                Switch to Member
+                            </router-link>
+                            <button
+                                @click="handleLogout"
+                                class="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-red-400/80 hover:text-red-400 hover:bg-white/4 transition-colors"
+                            >
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
+                                </svg>
+                                Sign out
+                            </button>
+                        </div>
+                    </div>
+                </Transition>
 
-            <!-- User footer -->
-            <div class="px-3 py-4">
-                <div class="flex items-center gap-3 px-3 py-3">
+                <!-- Avatar button -->
+                <button
+                    @click="showUserMenu = !showUserMenu"
+                    class="flex items-center gap-3 w-full px-3 py-2.5 rounded-2xl hover:bg-white/6 transition-colors text-left"
+                >
                     <div class="w-10 h-10 rounded-2xl bg-white/10 flex items-center justify-center text-sm font-bold text-gold ring-1 ring-white/8">
                         {{ auth.user?.first_name?.[0] }}{{ auth.user?.last_name?.[0] }}
                     </div>
@@ -131,17 +174,14 @@ async function handleLogout() {
                         <p class="text-sm font-medium truncate text-white/90">{{ auth.user?.first_name }} {{ auth.user?.last_name }}</p>
                         <p class="text-xs text-white/30 capitalize truncate">{{ auth.roleType }}</p>
                     </div>
-                </div>
-                <button
-                    @click="handleLogout"
-                    class="flex items-center gap-2.5 w-full mt-1 px-4 py-2.5 rounded-2xl text-sm text-white/40 hover:text-red-400 hover:bg-white/4 transition-colors"
-                >
-                    <svg class="w-4.5 h-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
+                    <svg class="w-4 h-4 text-white/30 shrink-0 transition-transform duration-200" :class="showUserMenu ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4.5 15.75l7.5-7.5 7.5 7.5" />
                     </svg>
-                    Sign out
                 </button>
             </div>
+
+            <!-- Click-outside overlay to close menu -->
+            <div v-if="showUserMenu" class="fixed inset-0 z-[-1]" @click="showUserMenu = false" />
         </aside>
 
         <!-- Main content -->

@@ -41,6 +41,22 @@ export const memberRoutes: RouteRecordRaw[] = [
                 ]
             },
             {
+                path: 'events',
+                children: [
+                    {
+                        path: '',
+                        name: 'member-events',
+                        component: () => import('@/pages/member/EventsPage.vue')
+                    },
+                    {
+                        path: ':id',
+                        name: 'member-event-detail',
+                        component: () => import('@/pages/member/EventDetailPage.vue'),
+                        props: true
+                    }
+                ]
+            },
+            {
                 path: 'devotional',
                 name: 'member-devotional',
                 component: () => import('@/pages/member/DevotionalWallPage.vue')

@@ -176,8 +176,14 @@ function formatDate(d: string | null) {
                                     {{ evt.is_active ? 'Active' : 'Inactive' }}
                                 </button>
                             </td>
-                            <td class="px-4 py-3 text-right">
-                                <button class="text-navy hover:text-navy-600 text-sm font-medium" @click="openEdit(evt)">
+                            <td class="px-4 py-3 text-right space-x-2">
+                                <router-link
+                                    :to="{ name: 'admin-event-detail', params: { id: evt.id } }"
+                                    class="text-navy hover:text-navy-600 text-sm font-medium"
+                                >
+                                    View
+                                </router-link>
+                                <button class="text-gray-500 hover:text-navy text-sm font-medium" @click="openEdit(evt)">
                                     Edit
                                 </button>
                             </td>

@@ -19,5 +19,17 @@ export const authRoutes: RouteRecordRaw[] = [
         name: 'pending',
         component: () => import('@/pages/auth/PendingPage.vue'),
         meta: { layout: 'auth' }
+    },
+    {
+        path: '/rejected',
+        name: 'rejected',
+        component: () => import('@/pages/auth/RejectedPage.vue'),
+        meta: { layout: 'auth' }
+    },
+    {
+        path: '/auth/callback',
+        name: 'auth-callback',
+        component: () => import('@/pages/auth/AuthCallbackPage.vue'),
+        meta: { layout: 'auth' }
     }
 ]

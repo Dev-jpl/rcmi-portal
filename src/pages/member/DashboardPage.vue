@@ -14,7 +14,6 @@ import { useAuthStore } from '@/stores/auth.store'
 import { useAttendanceStore } from '@/stores/attendance.store'
 import { useMemberStore } from '@/stores/member.store'
 import { useAnnouncementStore } from '@/stores/announcement.store'
-import { useQR } from '@/composables/useQR'
 import { useRsvp } from '@/composables/useRsvp'
 import { supabase } from '@/lib/supabase'
 import type { Tables } from '@/types/database.types'
@@ -30,8 +29,6 @@ const { rsvps, rsvpCounts, fetchRsvps, setRsvp } = useRsvp()
 const upcomingEvents = ref<Tables<'tbl_events'>[]>([])
 const birthdays = ref<{ name: string; birthday: string; daysUntil: number }[]>([])
 const pageLoading = ref(true)
-
-const { qrDataUrl } = useQR(() => auth.profile?.qr_token)
 
 onMounted(async () => {
     await Promise.all([
@@ -161,8 +158,14 @@ const chartOptions = {
     },
 }
 
-const pinnedAnnouncements = computed(() =>
-    announcementStore.announcements.filter((a) => a.is_pinned).slice(0, 3),
+const recentAnnouncements = computed(() =>
+    [...announcementStore.announcements]
+        .sort((a, b) => {
+            if (a.is_pinned && !b.is_pinned) return -1
+            if (!a.is_pinned && b.is_pinned) return 1
+            return new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime()
+        })
+        .slice(0, 5),
 )
 
 function formatDate(d: string | null) {
@@ -190,40 +193,16 @@ function getRsvpCount(eventId: number) {
         <div class="relative overflow-hidden rounded-2xl mb-8">
             <div class="absolute inset-0 bg-gradient-to-br from-navy via-navy-700 to-navy-600" />
             <div class="absolute inset-0 opacity-[0.04]" style="background-image: radial-gradient(circle at 20% 50%, white 1px, transparent 1px); background-size: 24px 24px;" />
-            <div class="relative px-6 py-8 sm:px-8 sm:py-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6">
-                <div>
-                    <p class="text-navy-200 text-sm font-medium mb-1">
-                        {{ new Date().toLocaleDateString('en', { weekday: 'long', month: 'long', day: 'numeric' }) }}
-                    </p>
-                    <h1 class="text-2xl sm:text-3xl font-heading font-bold text-white mb-2">
-                        {{ greeting }}, {{ auth.user?.first_name }}
-                    </h1>
-                    <p class="text-white/60 text-sm">
-                        {{ auth.profile?.satellite_church_name ?? 'RCMI' }} Member
-                    </p>
-                </div>
-                <div v-if="qrDataUrl" class="bg-white rounded-2xl p-2.5 shadow-lg shadow-black/20 shrink-0 self-start sm:self-center">
-                    <img :src="qrDataUrl" alt="QR Code" class="w-24 h-24 sm:w-28 sm:h-28" />
-                </div>
-            </div>
-        </div>
-
-        <!-- Pinned Announcements -->
-        <div v-if="pinnedAnnouncements.length" class="mb-8 space-y-3">
-            <div
-                v-for="a in pinnedAnnouncements"
-                :key="a.id"
-                class="bg-gradient-to-r from-gold-50 to-gold-100/50 border border-gold-200/60 rounded-xl px-5 py-4 flex items-start gap-4"
-            >
-                <div class="w-9 h-9 rounded-xl bg-gold/20 flex items-center justify-center shrink-0">
-                    <svg class="w-4.5 h-4.5 text-gold-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.34 15.84c-.688-.06-1.386-.09-2.09-.09H7.5a4.5 4.5 0 110-9h.75c.704 0 1.402-.03 2.09-.09m0 9.18c.253.962.584 1.892.985 2.783.247.55.06 1.21-.463 1.511l-.657.38c-.551.318-1.26.117-1.527-.461a20.845 20.845 0 01-1.44-4.282m3.102.069a18.03 18.03 0 01-.59-4.59c0-1.586.205-3.124.59-4.59m0 9.18a23.848 23.848 0 018.835 2.535M10.34 6.66a23.847 23.847 0 008.835-2.535m0 0A23.74 23.74 0 0018.795 3m.38 1.125a23.91 23.91 0 011.014 5.395m-1.014 8.855c-.118.38-.245.754-.38 1.125m.38-1.125a23.91 23.91 0 001.014-5.395m0-3.46c.495.413.811 1.035.811 1.73 0 .695-.316 1.317-.811 1.73m0-3.46a24.347 24.347 0 010 3.46" />
-                    </svg>
-                </div>
-                <div class="min-w-0 flex-1">
-                    <p class="text-sm font-semibold text-gray-900">{{ a.title }}</p>
-                    <p class="text-xs text-gray-500 mt-0.5 line-clamp-1">{{ a.content }}</p>
-                </div>
+            <div class="relative px-6 py-8 sm:px-8 sm:py-10">
+                <p class="text-navy-200 text-sm font-medium mb-1">
+                    {{ new Date().toLocaleDateString('en', { weekday: 'long', month: 'long', day: 'numeric' }) }}
+                </p>
+                <h1 class="text-2xl sm:text-3xl font-heading font-bold text-white mb-2">
+                    {{ greeting }}, {{ auth.user?.first_name }}
+                </h1>
+                <p class="text-white/60 text-sm">
+                    {{ auth.profile?.satellite_church_name ?? 'RCMI' }} Member
+                </p>
             </div>
         </div>
 
@@ -419,27 +398,54 @@ function getRsvpCount(eventId: number) {
 
                 <!-- Right column -->
                 <div class="space-y-6">
-                    <!-- QR Code Widget -->
-                    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 sm:p-6 text-center">
-                        <h2 class="font-heading font-semibold text-navy text-lg mb-4">My QR Code</h2>
-                        <div v-if="qrDataUrl" class="flex justify-center">
-                            <div class="bg-gray-50 rounded-2xl p-4 border border-gray-100">
-                                <img :src="qrDataUrl" alt="QR Code" class="w-36 h-36" />
-                            </div>
+                    <!-- Announcements -->
+                    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 sm:p-6">
+                        <div class="flex items-center justify-between mb-4">
+                            <h2 class="font-heading font-semibold text-navy text-lg">Announcements</h2>
+                            <router-link
+                                :to="{ name: 'member-announcements' }"
+                                class="text-xs text-navy/60 hover:text-navy font-medium transition-colors"
+                            >
+                                View all
+                            </router-link>
                         </div>
-                        <div v-else class="w-36 h-36 mx-auto bg-gray-50 rounded-2xl flex items-center justify-center border border-gray-100">
-                            <span class="text-xs text-gray-400">No QR token</span>
-                        </div>
-                        <p class="text-xs text-gray-400 mt-3">Show this for attendance scanning</p>
-                        <router-link
-                            :to="{ name: 'member-qr' }"
-                            class="inline-flex items-center gap-1.5 mt-4 text-sm text-navy font-medium hover:text-navy-600 transition-colors"
-                        >
-                            View Full Size
-                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                        <div v-if="!recentAnnouncements.length" class="text-sm text-gray-400 py-8 text-center">
+                            <svg class="w-10 h-10 text-gray-200 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10.34 15.84c-.688-.06-1.386-.09-2.09-.09H7.5a4.5 4.5 0 110-9h.75c.704 0 1.402-.03 2.09-.09m0 9.18c.253.962.584 1.892.985 2.783.247.55.06 1.21-.463 1.511l-.657.38c-.551.318-1.26.117-1.527-.461a20.845 20.845 0 01-1.44-4.282m3.102.069a18.03 18.03 0 01-.59-4.59c0-1.586.205-3.124.59-4.59m0 9.18a23.848 23.848 0 018.835 2.535M10.34 6.66a23.847 23.847 0 008.835-2.535m0 0A23.74 23.74 0 0018.795 3m.38 1.125a23.91 23.91 0 011.014 5.395m-1.014 8.855c-.118.38-.245.754-.38 1.125m.38-1.125a23.91 23.91 0 001.014-5.395m0-3.46c.495.413.811 1.035.811 1.73 0 .695-.316 1.317-.811 1.73m0-3.46a24.347 24.347 0 010 3.46" />
                             </svg>
-                        </router-link>
+                            No announcements yet
+                        </div>
+                        <div v-else class="space-y-3">
+                            <router-link
+                                v-for="a in recentAnnouncements"
+                                :key="a.id"
+                                :to="{ name: 'member-announcements' }"
+                                class="block p-3.5 rounded-xl transition-all duration-200 hover:bg-gray-50"
+                                :class="a.is_pinned ? 'bg-gold-50/50 border border-gold-200/40' : 'bg-gray-50/60 border border-transparent hover:border-gray-100'"
+                            >
+                                <div class="flex items-start gap-3">
+                                    <div
+                                        class="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5"
+                                        :class="a.is_pinned ? 'bg-gold/15' : 'bg-navy/[0.06]'"
+                                    >
+                                        <svg v-if="a.is_pinned" class="w-3.5 h-3.5 text-gold-600" fill="currentColor" viewBox="0 0 20 20">
+                                            <path d="M10.75 2.567a.75.75 0 00-1.5 0v2.017a.75.75 0 001.5 0V2.567zM10 6a4 4 0 00-4 4c0 1.17.503 2.222 1.304 2.95l-.052 2.3A.75.75 0 008 16h4a.75.75 0 00.748-.75l-.052-2.3A3.982 3.982 0 0014 10a4 4 0 00-4-4zm-1.25 11.5a.75.75 0 000 1.5h2.5a.75.75 0 000-1.5h-2.5z" />
+                                        </svg>
+                                        <svg v-else class="w-3.5 h-3.5 text-navy/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10.34 15.84c-.688-.06-1.386-.09-2.09-.09H7.5a4.5 4.5 0 110-9h.75c.704 0 1.402-.03 2.09-.09m0 9.18c.253.962.584 1.892.985 2.783.247.55.06 1.21-.463 1.511l-.657.38c-.551.318-1.26.117-1.527-.461a20.845 20.845 0 01-1.44-4.282m3.102.069a18.03 18.03 0 01-.59-4.59c0-1.586.205-3.124.59-4.59m0 9.18a23.848 23.848 0 018.835 2.535M10.34 6.66a23.847 23.847 0 008.835-2.535" />
+                                        </svg>
+                                    </div>
+                                    <div class="min-w-0 flex-1">
+                                        <div class="flex items-center gap-2">
+                                            <p class="text-sm font-semibold text-gray-900 truncate">{{ a.title }}</p>
+                                            <span v-if="a.is_pinned" class="text-[10px] text-gold-600 font-semibold uppercase tracking-wider shrink-0">Pinned</span>
+                                        </div>
+                                        <p class="text-xs text-gray-500 mt-0.5 line-clamp-2">{{ a.content }}</p>
+                                        <p class="text-[11px] text-gray-300 mt-1.5">{{ formatDate(a.created_at ?? null) }}</p>
+                                    </div>
+                                </div>
+                            </router-link>
+                        </div>
                     </div>
 
                     <!-- Birthday Reminders -->

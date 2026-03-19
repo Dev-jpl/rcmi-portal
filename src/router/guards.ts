@@ -17,12 +17,13 @@ export async function authGuard(
     }
 
     // Block pending members from accessing app
-    if (auth.profile?.status === 'pending') {
+    if (auth.profile?.status === 'pending' && to.name !== 'pending') {
         return next({ name: 'pending' })
     }
 
-    if (auth.profile?.status === 'rejected') {
-        return next({ name: 'login' })
+    // Redirect rejected members to dedicated page
+    if (auth.profile?.status === 'rejected' && to.name !== 'rejected') {
+        return next({ name: 'rejected' })
     }
 
     return next()
@@ -59,10 +60,21 @@ export async function guestGuard(
 
     if (!auth.resolved) await auth.resolveSession()
 
-    if (auth.user && auth.profile?.status === 'approved') {
-        const role = auth.user.role_type
-        const adminRoles = ['super_admin', 'admin', 'pastoral', 'network_leader']
-        return next({ name: adminRoles.includes(role) ? 'admin-dashboard' : 'member-dashboard' })
+    if (auth.user) {
+        // Pending → pending page
+        if (auth.profile?.status === 'pending') {
+            return next({ name: 'pending' })
+        }
+        // Rejected → rejected page
+        if (auth.profile?.status === 'rejected') {
+            return next({ name: 'rejected' })
+        }
+        // Approved → dashboard
+        if (auth.profile?.status === 'approved') {
+            const role = auth.user.role_type
+            const adminRoles = ['super_admin', 'admin', 'pastoral', 'network_leader']
+            return next({ name: adminRoles.includes(role) ? 'admin-dashboard' : 'member-dashboard' })
+        }
     }
 
     return next()

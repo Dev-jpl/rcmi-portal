@@ -2,7 +2,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { supabase } from '@/lib/supabase'
-import type { User, Session } from '@supabase/supabase-js'
+import type { Session } from '@supabase/supabase-js'
 import type { TblUser, TblMembersProfile } from '@/types/database.types'
 
 export const useAuthStore = defineStore('auth', () => {
@@ -19,6 +19,7 @@ export const useAuthStore = defineStore('auth', () => {
     const isAuthenticated = computed(() => !!session.value)
     const isApproved = computed(() => profile.value?.status === 'approved')
     const isPending = computed(() => profile.value?.status === 'pending')
+    const isRejected = computed(() => profile.value?.status === 'rejected')
     const isAdmin = computed(() =>
         ['super_admin', 'admin', 'pastoral'].includes(user.value?.role_type ?? '')
     )
@@ -80,19 +81,31 @@ export const useAuthStore = defineStore('auth', () => {
         middleName?: string
         lastName: string
         satelliteChurchId: number
+        satelliteChurchName?: string
     }) {
         loading.value = true
         error.value = null
 
         try {
             // 1. Create Supabase Auth user
+            const siteUrl = import.meta.env.VITE_APP_URL || window.location.origin
             const { data: authData, error: authError } = await supabase.auth.signUp({
                 email: payload.email,
-                password: payload.password
+                password: payload.password,
+                options: {
+                    emailRedirectTo: `${siteUrl}/auth/callback`,
+                },
             })
 
             if (authError) throw authError
-            if (!authData.user) throw new Error('Registration failed')
+            if (!authData.user) throw new Error('Registration failed. Please try again.')
+
+            // Supabase returns a fake success for existing emails (security)
+            // Check if identities array is empty — means user already exists
+            const identities = (authData.user as any).identities
+            if (Array.isArray(identities) && identities.length === 0) {
+                throw new Error('An account with this email has already been registered.')
+            }
 
             const userId = authData.user.id
 
@@ -117,10 +130,15 @@ export const useAuthStore = defineStore('auth', () => {
                 middle_name: payload.middleName ?? null,
                 last_name: payload.lastName,
                 satellite_church_id: payload.satelliteChurchId,
+                satellite_church_name: payload.satelliteChurchName ?? null,
                 status: 'pending'
             })
 
             if (profileError) throw profileError
+
+            // Fetch user data so session is established
+            session.value = authData.session
+            await fetchUserData(userId)
 
             return { success: true }
         } catch (err: any) {
@@ -178,6 +196,7 @@ export const useAuthStore = defineStore('auth', () => {
         isAuthenticated,
         isApproved,
         isPending,
+        isRejected,
         isAdmin,
         isLeader,
         roleType,
