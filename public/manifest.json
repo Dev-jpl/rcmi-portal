@@ -1,0 +1,17 @@
+{
+  "name": "RCMI Portal",
+  "short_name": "RCMI",
+  "description": "Reach, Connect, Mobilize, Inspire — Church Management Portal",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#091f55",
+  "theme_color": "#091f55",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64",
+      "type": "image/x-icon"
+    }
+  ]
+}

@@ -1,0 +1,324 @@
+<script setup lang="ts">
+import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { supabase } from '@/lib/supabase'
+import { useAdminStore } from '@/stores/admin.store'
+import * as XLSX from 'xlsx'
+import type { Tables } from '@/types/database.types'
+
+type MembersProfile = Tables<'tbl_members_profile'>
+
+const admin = useAdminStore()
+const router = useRouter()
+
+const search = ref('')
+const statusFilter = ref('')
+const churchFilter = ref<number | null>(null)
+const lastAttendance = ref<Map<string, string>>(new Map())
+const rejectReason = ref('')
+const rejectTarget = ref<MembersProfile | null>(null)
+const showRejectModal = ref(false)
+const actionLoading = ref<number | null>(null)
+const message = ref<{ type: 'success' | 'error'; text: string } | null>(null)
+
+const churches = ref<{ id: number; church_name: string }[]>([])
+
+onMounted(async () => {
+    await Promise.all([admin.fetchMembers(), fetchChurches(), fetchLastAttendance()])
+})
+
+async function fetchChurches() {
+    const { data } = await supabase
+        .from('lib_satellite_churches')
+        .select('id, church_name')
+        .order('church_name')
+    churches.value = data ?? []
+}
+
+async function fetchLastAttendance() {
+    const { data } = await supabase
+        .from('tbl_attendance_logs')
+        .select('user_id, log_date')
+        .order('log_date', { ascending: false })
+
+    if (!data) return
+    const map = new Map<string, string>()
+    for (const row of data) {
+        if (!map.has(row.user_id)) {
+            map.set(row.user_id, row.log_date)
+        }
+    }
+    lastAttendance.value = map
+}
+
+function isInactive(userId: string): boolean {
+    const last = lastAttendance.value.get(userId)
+    if (!last) return true
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+    return last < thirtyDaysAgo
+}
+
+const filtered = computed(() => {
+    let list = admin.members
+    const q = search.value.toLowerCase()
+    if (q) {
+        list = list.filter(
+            (m) =>
+                m.first_name?.toLowerCase().includes(q) ||
+                m.last_name?.toLowerCase().includes(q) ||
+                m.email?.toLowerCase().includes(q),
+        )
+    }
+    if (statusFilter.value === 'inactive') {
+        list = list.filter((m) => m.status === 'approved' && isInactive(m.user_id))
+    } else if (statusFilter.value) {
+        list = list.filter((m) => m.status === statusFilter.value)
+    }
+    if (churchFilter.value) {
+        list = list.filter((m) => m.satellite_church_id === churchFilter.value)
+    }
+    return list
+})
+
+async function handleApprove(member: MembersProfile) {
+    actionLoading.value = member.id
+    message.value = null
+    const result = await admin.approveMember(member)
+    if (result.success) {
+        message.value = { type: 'success', text: `${member.first_name} ${member.last_name} approved.` }
+    } else {
+        message.value = { type: 'error', text: result.error ?? 'Failed to approve.' }
+    }
+    actionLoading.value = null
+}
+
+function openReject(member: MembersProfile) {
+    rejectTarget.value = member
+    rejectReason.value = ''
+    showRejectModal.value = true
+}
+
+async function handleReject() {
+    if (!rejectTarget.value) return
+    actionLoading.value = rejectTarget.value.id
+    message.value = null
+    const result = await admin.rejectMember(rejectTarget.value, rejectReason.value)
+    if (result.success) {
+        message.value = { type: 'success', text: `${rejectTarget.value.first_name} rejected.` }
+    } else {
+        message.value = { type: 'error', text: result.error ?? 'Failed to reject.' }
+    }
+    showRejectModal.value = false
+    actionLoading.value = null
+}
+
+function exportToExcel() {
+    const rows = filtered.value.map((m) => ({
+        'First Name': m.first_name ?? '',
+        'Last Name': m.last_name ?? '',
+        Email: m.email ?? '',
+        Status: m.status ?? '',
+        Church: m.satellite_church_name ?? '',
+        'Date Joined': m.created_at ? new Date(m.created_at).toLocaleDateString() : '',
+    }))
+    const ws = XLSX.utils.json_to_sheet(rows)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Members')
+    XLSX.writeFile(wb, 'members.xlsx')
+}
+
+function viewMember(m: MembersProfile) {
+    router.push({ name: 'admin-member-detail', params: { id: m.user_id } })
+}
+
+function formatDate(d: string | null) {
+    if (!d) return '—'
+    return new Date(d).toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+</script>
+
+<template>
+    <div>
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+            <div>
+                <h1 class="text-2xl font-heading font-bold text-navy">Members</h1>
+                <p class="text-sm text-gray-500 mt-1">{{ filtered.length }} member{{ filtered.length !== 1 ? 's' : '' }}</p>
+            </div>
+            <button
+                class="inline-flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-300 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors"
+                @click="exportToExcel"
+            >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Export Excel
+            </button>
+        </div>
+
+        <!-- Filters -->
+        <div class="flex flex-wrap gap-3 mb-4">
+            <input
+                v-model="search"
+                type="text"
+                placeholder="Search name or email..."
+                class="w-full sm:w-64 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-navy/30 focus:border-navy"
+            />
+            <select
+                v-model="statusFilter"
+                class="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-navy/30"
+            >
+                <option value="">All Status</option>
+                <option value="pending">Pending</option>
+                <option value="approved">Approved</option>
+                <option value="rejected">Rejected</option>
+                <option value="inactive">Inactive (30d+)</option>
+            </select>
+            <select
+                v-model="churchFilter"
+                class="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-navy/30"
+            >
+                <option :value="null">All Churches</option>
+                <option v-for="c in churches" :key="c.id" :value="c.id">{{ c.church_name }}</option>
+            </select>
+        </div>
+
+        <!-- Message -->
+        <p
+            v-if="message"
+            class="text-sm rounded-lg px-4 py-2 mb-4"
+            :class="message.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'"
+        >
+            {{ message.text }}
+        </p>
+
+        <!-- Loading -->
+        <div v-if="admin.loading" class="space-y-3">
+            <div v-for="i in 5" :key="i" class="h-14 bg-gray-200 rounded-lg animate-pulse" />
+        </div>
+
+        <!-- Empty -->
+        <div v-else-if="!filtered.length" class="text-center py-12 text-gray-400">
+            No members found.
+        </div>
+
+        <!-- Table -->
+        <div v-else class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="bg-gray-50 text-left text-gray-500 font-medium">
+                            <th class="px-4 py-3">Name</th>
+                            <th class="px-4 py-3 hidden md:table-cell">Email</th>
+                            <th class="px-4 py-3 hidden lg:table-cell">Church</th>
+                            <th class="px-4 py-3">Status</th>
+                            <th class="px-4 py-3 hidden md:table-cell">Joined</th>
+                            <th class="px-4 py-3 text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-100">
+                        <tr
+                            v-for="m in filtered"
+                            :key="m.id"
+                            class="hover:bg-gray-50/50 cursor-pointer"
+                            @click="viewMember(m)"
+                        >
+                            <td class="px-4 py-3">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-8 h-8 rounded-full bg-navy-100 flex items-center justify-center text-xs font-bold text-navy shrink-0">
+                                        {{ (m.first_name?.[0] ?? '') + (m.last_name?.[0] ?? '') }}
+                                    </div>
+                                    <span class="font-medium text-gray-900">{{ m.first_name }} {{ m.last_name }}</span>
+                                </div>
+                            </td>
+                            <td class="px-4 py-3 text-gray-500 hidden md:table-cell">{{ m.email }}</td>
+                            <td class="px-4 py-3 text-gray-500 hidden lg:table-cell">{{ m.satellite_church_name ?? '—' }}</td>
+                            <td class="px-4 py-3">
+                                <div class="flex items-center gap-1.5">
+                                    <span
+                                        class="inline-flex px-2 py-0.5 rounded-full text-xs font-medium"
+                                        :class="{
+                                            'bg-green-100 text-green-700': m.status === 'approved',
+                                            'bg-yellow-100 text-yellow-700': m.status === 'pending',
+                                            'bg-red-100 text-red-600': m.status === 'rejected',
+                                        }"
+                                    >
+                                        {{ m.status }}
+                                    </span>
+                                    <span
+                                        v-if="m.status === 'approved' && isInactive(m.user_id)"
+                                        class="inline-flex px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-orange-100 text-orange-600"
+                                        title="No attendance in 30+ days"
+                                    >
+                                        Inactive
+                                    </span>
+                                </div>
+                            </td>
+                            <td class="px-4 py-3 text-gray-400 text-xs hidden md:table-cell">{{ formatDate(m.created_at) }}</td>
+                            <td class="px-4 py-3 text-right" @click.stop>
+                                <template v-if="m.status === 'pending'">
+                                    <button
+                                        :disabled="actionLoading === m.id"
+                                        class="text-green-600 hover:text-green-700 text-sm font-medium mr-3"
+                                        @click="handleApprove(m)"
+                                    >
+                                        Approve
+                                    </button>
+                                    <button
+                                        :disabled="actionLoading === m.id"
+                                        class="text-red-500 hover:text-red-600 text-sm font-medium"
+                                        @click="openReject(m)"
+                                    >
+                                        Reject
+                                    </button>
+                                </template>
+                                <button
+                                    v-else
+                                    class="text-navy hover:text-navy-600 text-sm font-medium"
+                                    @click="viewMember(m)"
+                                >
+                                    View
+                                </button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Reject Modal -->
+        <Teleport to="body">
+            <div
+                v-if="showRejectModal"
+                class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+                @click.self="showRejectModal = false"
+            >
+                <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+                    <h3 class="text-lg font-heading font-bold text-navy mb-4">Reject Member</h3>
+                    <p class="text-sm text-gray-600 mb-3">
+                        Rejecting <strong>{{ rejectTarget?.first_name }} {{ rejectTarget?.last_name }}</strong>
+                    </p>
+                    <textarea
+                        v-model="rejectReason"
+                        rows="3"
+                        placeholder="Reason for rejection (optional)..."
+                        class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-navy/30 resize-none"
+                    />
+                    <div class="flex justify-end gap-3 mt-4">
+                        <button
+                            class="px-4 py-2 border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50"
+                            @click="showRejectModal = false"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            class="px-4 py-2 bg-red-500 text-white text-sm font-semibold rounded-lg hover:bg-red-600"
+                            @click="handleReject"
+                        >
+                            Reject
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </Teleport>
+    </div>
+</template>

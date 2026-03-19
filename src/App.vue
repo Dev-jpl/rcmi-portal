@@ -1,11 +1,25 @@
-<script setup lang="ts"></script>
+<script setup lang="ts">
+import { computed, defineAsyncComponent } from 'vue'
+import { useRoute } from 'vue-router'
+
+const route = useRoute()
+
+const layouts: Record<string, ReturnType<typeof defineAsyncComponent>> = {
+    auth: defineAsyncComponent(() => import('@/layouts/AuthLayout.vue')),
+    app: defineAsyncComponent(() => import('@/layouts/AppLayout.vue')),
+    admin: defineAsyncComponent(() => import('@/layouts/AdminLayout.vue')),
+}
+
+const layout = computed(() => {
+    const name = (route.meta.layout as string)
+        ?? (route.matched.find(r => r.meta.layout)?.meta.layout as string)
+        ?? 'auth'
+    return layouts[name] ?? layouts.auth
+})
+</script>
 
 <template>
-  <h1>You did it!</h1>
-  <p>
-    Visit <a href="https://vuejs.org/" target="_blank" rel="noopener">vuejs.org</a> to read the
-    documentation
-  </p>
+    <component :is="layout">
+        <router-view />
+    </component>
 </template>
-
-<style scoped></style>
