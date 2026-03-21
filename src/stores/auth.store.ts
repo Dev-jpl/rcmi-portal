@@ -15,16 +15,24 @@ export const useAuthStore = defineStore('auth', () => {
     const loading = ref(false)
     const error = ref<string | null>(null)
 
+    // Leadership assignments (based on active records in leadership tables)
+    const isPastor = ref(false)
+    const isNetworkLeader = ref(false)
+    const isLpathLeader = ref(false)
+
     // ── Getters ───────────────────────────────────────────────
     const isAuthenticated = computed(() => !!session.value)
     const isApproved = computed(() => profile.value?.status === 'approved')
     const isPending = computed(() => profile.value?.status === 'pending')
     const isRejected = computed(() => profile.value?.status === 'rejected')
     const isAdmin = computed(() =>
-        ['super_admin', 'admin', 'pastoral'].includes(user.value?.role_type ?? '')
+        ['super_admin', 'admin'].includes(user.value?.role_type ?? '')
     )
-    const isLeader = computed(() =>
-        ['network_leader', 'lpath_leader'].includes(user.value?.role_type ?? '')
+    const hasLeadershipRole = computed(() =>
+        isPastor.value || isNetworkLeader.value || isLpathLeader.value
+    )
+    const canAccessAdmin = computed(() =>
+        isAdmin.value || hasLeadershipRole.value
     )
     const roleType = computed(() => user.value?.role_type ?? 'member')
 
@@ -65,13 +73,25 @@ export const useAuthStore = defineStore('auth', () => {
     }
 
     async function fetchUserData(userId: string) {
-        const [{ data: userData }, { data: profileData }] = await Promise.all([
+        const [
+            { data: userData },
+            { data: profileData },
+            { data: pastoralData },
+            { data: networkData },
+            { data: lpathData },
+        ] = await Promise.all([
             supabase.from('tbl_users').select('*').eq('id', userId).single(),
-            supabase.from('tbl_members_profile').select('*').eq('user_id', userId).single()
+            supabase.from('tbl_members_profile').select('*').eq('user_id', userId).single(),
+            supabase.from('tbl_pastoral_members').select('id').eq('user_id', userId).eq('is_active', 'Y').limit(1),
+            supabase.from('tbl_network_leaders').select('id').eq('user_id', userId).eq('is_active', 'Y').limit(1),
+            supabase.from('tbl_lpath_leaders').select('id').eq('user_id', userId).eq('is_active', 'Y').limit(1),
         ])
 
         user.value = userData ?? null
         profile.value = profileData ?? null
+        isPastor.value = (pastoralData?.length ?? 0) > 0
+        isNetworkLeader.value = (networkData?.length ?? 0) > 0
+        isLpathLeader.value = (lpathData?.length ?? 0) > 0
     }
 
     async function register(payload: {
@@ -173,6 +193,43 @@ export const useAuthStore = defineStore('auth', () => {
         }
     }
 
+    async function forgotPassword(email: string) {
+        loading.value = true
+        error.value = null
+
+        try {
+            const siteUrl = import.meta.env.VITE_APP_URL || window.location.origin
+            const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+                redirectTo: `${siteUrl}/reset-password`,
+            })
+            if (resetError) throw resetError
+            return { success: true }
+        } catch (err: any) {
+            error.value = err.message ?? 'Failed to send reset email'
+            return { success: false, error: error.value }
+        } finally {
+            loading.value = false
+        }
+    }
+
+    async function updatePassword(newPassword: string) {
+        loading.value = true
+        error.value = null
+
+        try {
+            const { error: updateError } = await supabase.auth.updateUser({
+                password: newPassword,
+            })
+            if (updateError) throw updateError
+            return { success: true }
+        } catch (err: any) {
+            error.value = err.message ?? 'Failed to update password'
+            return { success: false, error: error.value }
+        } finally {
+            loading.value = false
+        }
+    }
+
     async function logout() {
         await supabase.auth.signOut()
         clearState()
@@ -182,6 +239,9 @@ export const useAuthStore = defineStore('auth', () => {
         session.value = null
         user.value = null
         profile.value = null
+        isPastor.value = false
+        isNetworkLeader.value = false
+        isLpathLeader.value = false
     }
 
     return {
@@ -198,13 +258,19 @@ export const useAuthStore = defineStore('auth', () => {
         isPending,
         isRejected,
         isAdmin,
-        isLeader,
+        isPastor,
+        isNetworkLeader,
+        isLpathLeader,
+        hasLeadershipRole,
+        canAccessAdmin,
         roleType,
         // actions
         resolveSession,
         fetchUserData,
         register,
         login,
+        forgotPassword,
+        updatePassword,
         logout
     }
 })

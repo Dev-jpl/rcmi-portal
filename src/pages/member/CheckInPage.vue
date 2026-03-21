@@ -39,7 +39,8 @@ async function fetchActiveEvents() {
     }
 
     const { data } = await query
-    events.value = data ?? []
+    // Only show events that allow self check-in
+    events.value = (data ?? []).filter((e: any) => e.allow_self_checkin !== false)
 }
 
 function markAlreadyCheckedIn() {

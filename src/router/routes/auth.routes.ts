@@ -15,6 +15,18 @@ export const authRoutes: RouteRecordRaw[] = [
         meta: { layout: 'auth', guest: true }
     },
     {
+        path: '/forgot-password',
+        name: 'forgot-password',
+        component: () => import('@/pages/auth/ForgotPasswordPage.vue'),
+        meta: { layout: 'auth', guest: true }
+    },
+    {
+        path: '/reset-password',
+        name: 'reset-password',
+        component: () => import('@/pages/auth/ResetPasswordPage.vue'),
+        meta: { layout: 'auth' }
+    },
+    {
         path: '/pending',
         name: 'pending',
         component: () => import('@/pages/auth/PendingPage.vue'),

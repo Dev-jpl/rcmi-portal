@@ -29,6 +29,7 @@ function getDefaults() {
         satellite_church_id: auth.profile?.satellite_church_id ?? null,
         remarks: '',
         is_active: true,
+        allow_self_checkin: false,
     }
 }
 
@@ -70,6 +71,7 @@ function openEdit(event: Event) {
         satellite_church_id: event.satellite_church_id,
         remarks: event.remarks ?? '',
         is_active: event.is_active ?? true,
+        allow_self_checkin: (event as any).allow_self_checkin ?? false,
     }
     modalOpen.value = true
 }
@@ -87,6 +89,7 @@ async function handleSave() {
         satellite_church_id: form.value.satellite_church_id,
         remarks: form.value.remarks || null,
         is_active: form.value.is_active,
+        allow_self_checkin: form.value.allow_self_checkin,
     }
 
     let result
@@ -271,10 +274,16 @@ function formatDate(d: string | null) {
                                 class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-navy/30 resize-none"
                             />
                         </div>
-                        <label class="flex items-center gap-2 cursor-pointer">
-                            <input v-model="form.is_active" type="checkbox" class="w-4 h-4 rounded border-gray-300 text-navy focus:ring-navy" />
-                            <span class="text-sm text-gray-700">Active</span>
-                        </label>
+                        <div class="flex flex-col gap-3">
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input v-model="form.is_active" type="checkbox" class="w-4 h-4 rounded border-gray-300 text-navy focus:ring-navy" />
+                                <span class="text-sm text-gray-700">Active</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input v-model="form.allow_self_checkin" type="checkbox" class="w-4 h-4 rounded border-gray-300 text-navy focus:ring-navy" />
+                                <span class="text-sm text-gray-700">Allow Self Check-In</span>
+                            </label>
+                        </div>
 
                         <p v-if="error" class="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{{ error }}</p>
 

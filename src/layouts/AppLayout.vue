@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth.store'
 import NotificationBell from '@/components/common/NotificationBell.vue'
@@ -57,6 +57,14 @@ const navGroups: NavGroup[] = [
     },
 ]
 
+const switchTarget = computed(() => {
+    if (auth.isAdmin) return { label: 'Switch to Admin', route: 'admin-dashboard' }
+    if (auth.isPastor) return { label: 'Switch to Management', route: 'admin-my-team' }
+    if (auth.isNetworkLeader) return { label: 'Switch to Management', route: 'admin-my-network' }
+    if (auth.isLpathLeader) return { label: 'Switch to Management', route: 'admin-my-lpath' }
+    return null
+})
+
 async function handleLogout() {
     await auth.logout()
     router.push({ name: 'login' })
@@ -110,6 +118,18 @@ async function handleLogout() {
 
             <!-- User footer (sticky bottom) -->
             <div class="shrink-0 border-t border-white/[0.08] px-3 py-3 relative">
+                <!-- Switch to Admin/Management -->
+                <router-link
+                    v-if="switchTarget"
+                    :to="{ name: switchTarget.route }"
+                    class="flex items-center gap-3 w-full px-4 py-2.5 mb-2 text-sm text-white/60 hover:text-white hover:bg-white/[0.06] rounded-2xl transition-colors"
+                >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" />
+                    </svg>
+                    {{ switchTarget.label }}
+                </router-link>
+
                 <!-- User menu popup -->
                 <Transition
                     enter-active-class="transition duration-150 ease-out"

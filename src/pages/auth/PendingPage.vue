@@ -26,8 +26,12 @@ async function checkStatus() {
 
     if (auth.profile?.status === 'approved') {
         if (pollInterval) clearInterval(pollInterval)
-        if (auth.isAdmin || auth.isLeader) {
-            router.push({ name: 'admin-dashboard' })
+        if (auth.canAccessAdmin) {
+            const target = auth.isAdmin ? 'admin-dashboard'
+                : auth.isPastor ? 'admin-my-team'
+                : auth.isNetworkLeader ? 'admin-my-network'
+                : 'admin-my-lpath'
+            router.push({ name: target })
         } else {
             router.push({ name: 'member-dashboard' })
         }

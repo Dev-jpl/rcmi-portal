@@ -43,11 +43,23 @@ export async function roleGuard(allowedRoles: string[]) {
 
         const userRole = auth.user.role_type ?? ''
 
-        if (!allowedRoles.includes(userRole)) {
-            return next({ name: 'member-dashboard' }) // redirect to safe fallback
+        // Check role_type first
+        if (allowedRoles.includes(userRole)) return next()
+
+        // Check leadership assignments
+        if (allowedRoles.includes('pastoral') && auth.isPastor) return next()
+        if (allowedRoles.includes('network_leader') && auth.isNetworkLeader) return next()
+        if (allowedRoles.includes('lpath_leader') && auth.isLpathLeader) return next()
+
+        // Leader without access to this specific page — redirect to their scoped page
+        if (auth.hasLeadershipRole) {
+            const fallback = auth.isPastor ? 'admin-my-team'
+                : auth.isNetworkLeader ? 'admin-my-network'
+                : 'admin-my-lpath'
+            return next({ name: fallback })
         }
 
-        return next()
+        return next({ name: 'member-dashboard' })
     }
 }
 
@@ -71,9 +83,11 @@ export async function guestGuard(
         }
         // Approved → dashboard
         if (auth.profile?.status === 'approved') {
-            const role = auth.user.role_type
-            const adminRoles = ['super_admin', 'admin', 'pastoral', 'network_leader']
-            return next({ name: adminRoles.includes(role) ? 'admin-dashboard' : 'member-dashboard' })
+            if (auth.isAdmin) return next({ name: 'admin-dashboard' })
+            if (auth.isPastor) return next({ name: 'admin-my-team' })
+            if (auth.isNetworkLeader) return next({ name: 'admin-my-network' })
+            if (auth.isLpathLeader) return next({ name: 'admin-my-lpath' })
+            return next({ name: 'member-dashboard' })
         }
     }
 

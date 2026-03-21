@@ -23,8 +23,12 @@ onMounted(async () => {
                     router.replace({ name: 'pending' })
                 } else if (auth.isRejected) {
                     router.replace({ name: 'rejected' })
-                } else if (auth.isAdmin || auth.isLeader) {
-                    router.replace({ name: 'admin-dashboard' })
+                } else if (auth.canAccessAdmin) {
+                    const target = auth.isAdmin ? 'admin-dashboard'
+                        : auth.isPastor ? 'admin-my-team'
+                        : auth.isNetworkLeader ? 'admin-my-network'
+                        : 'admin-my-lpath'
+                    router.replace({ name: target })
                 } else {
                     router.replace({ name: 'member-dashboard' })
                 }

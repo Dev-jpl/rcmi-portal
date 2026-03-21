@@ -1,7 +1,9 @@
 // src/router/routes/admin.routes.ts
 import type { RouteRecordRaw } from 'vue-router'
 
-const ADMIN_ROLES = ['super_admin', 'admin', 'pastoral', 'network_leader']
+// Parent-level roles — anyone with admin role OR active leadership assignment can enter /admin
+// Individual routes further restrict via their own meta.roles
+const ADMIN_ROLES = ['super_admin', 'admin', 'pastoral', 'network_leader', 'lpath_leader']
 
 export const adminRoutes: RouteRecordRaw[] = [
     {
@@ -14,15 +16,21 @@ export const adminRoutes: RouteRecordRaw[] = [
         children: [
             {
                 path: '',
-                redirect: { name: 'admin-dashboard' }
+                name: 'admin-root',
+                redirect: () => {
+                    // Dynamic redirect handled by AdminLayout or router guard
+                    return { name: 'admin-dashboard' }
+                }
             },
             {
                 path: 'dashboard',
                 name: 'admin-dashboard',
-                component: () => import('@/pages/admin/DashboardPage.vue')
+                component: () => import('@/pages/admin/DashboardPage.vue'),
+                meta: { roles: ['super_admin', 'admin'] }
             },
             {
                 path: 'members',
+                meta: { roles: ['super_admin', 'admin'] },
                 children: [
                     {
                         path: '',
@@ -39,6 +47,7 @@ export const adminRoutes: RouteRecordRaw[] = [
             },
             {
                 path: 'events',
+                meta: { roles: ['super_admin', 'admin'] },
                 children: [
                     {
                         path: '',
@@ -55,6 +64,7 @@ export const adminRoutes: RouteRecordRaw[] = [
             },
             {
                 path: 'attendance',
+                meta: { roles: ['super_admin', 'admin'] },
                 children: [
                     {
                         path: '',
@@ -65,7 +75,6 @@ export const adminRoutes: RouteRecordRaw[] = [
                         path: 'scan',
                         name: 'admin-qr-scan',
                         component: () => import('@/pages/admin/QRScanPage.vue'),
-                        // Only leaders can scan QR
                         meta: { roles: ['super_admin', 'admin', 'pastoral', 'network_leader', 'lpath_leader'] }
                     }
                 ]
@@ -80,12 +89,62 @@ export const adminRoutes: RouteRecordRaw[] = [
             {
                 path: 'reports',
                 name: 'admin-reports',
-                component: () => import('@/pages/admin/ReportsPage.vue')
+                component: () => import('@/pages/admin/ReportsPage.vue'),
+                meta: { roles: ['super_admin', 'admin'] }
             },
             {
                 path: 'announcements',
                 name: 'admin-announcements',
-                component: () => import('@/pages/admin/AnnouncementsPage.vue')
+                component: () => import('@/pages/admin/AnnouncementsPage.vue'),
+                meta: { roles: ['super_admin', 'admin'] }
+            },
+            {
+                path: 'bod-members',
+                name: 'admin-bod-members',
+                component: () => import('@/pages/admin/BodMembersPage.vue'),
+                meta: { roles: ['super_admin', 'admin'] }
+            },
+            {
+                path: 'pastoral-members',
+                name: 'admin-pastoral-members',
+                component: () => import('@/pages/admin/PastoralMembersPage.vue'),
+                meta: { roles: ['super_admin', 'admin'] }
+            },
+            {
+                path: 'network-leaders',
+                name: 'admin-network-leaders',
+                component: () => import('@/pages/admin/NetworkLeadersPage.vue'),
+                meta: { roles: ['super_admin', 'admin', 'pastoral'] }
+            },
+            {
+                path: 'lpath-leaders',
+                name: 'admin-lpath-leaders',
+                component: () => import('@/pages/admin/LpathLeadersPage.vue'),
+                meta: { roles: ['super_admin', 'admin', 'pastoral'] }
+            },
+            {
+                path: 'lpath-members',
+                name: 'admin-lpath-members',
+                component: () => import('@/pages/admin/LpathMembersPage.vue'),
+                meta: { roles: ['super_admin', 'admin', 'pastoral', 'network_leader'] }
+            },
+            {
+                path: 'my-team',
+                name: 'admin-my-team',
+                component: () => import('@/pages/admin/PastorDashboardPage.vue'),
+                meta: { roles: ['super_admin', 'admin', 'pastoral'] }
+            },
+            {
+                path: 'my-network',
+                name: 'admin-my-network',
+                component: () => import('@/pages/admin/NetworkDashboardPage.vue'),
+                meta: { roles: ['super_admin', 'admin', 'pastoral', 'network_leader'] }
+            },
+            {
+                path: 'my-lpath',
+                name: 'admin-my-lpath',
+                component: () => import('@/pages/admin/LpathDashboardPage.vue'),
+                meta: { roles: ['super_admin', 'admin', 'pastoral', 'network_leader', 'lpath_leader'] }
             },
             {
                 path: 'audit-log',

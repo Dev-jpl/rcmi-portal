@@ -1,15 +1,19 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/auth.store'
+import { useAdminStore } from '@/stores/admin.store'
+import { useQRScanner } from '@/composables/useQRScanner'
 import type { Tables } from '@/types/database.types'
 
 type Event = Tables<'tbl_events'>
+type AttendanceLog = Tables<'tbl_attendance_logs'>
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
+const admin = useAdminStore()
 
 const event = ref<Event | null>(null)
 const loading = ref(true)
@@ -29,8 +33,17 @@ interface RsvpEntry {
 
 const allRsvps = ref<RsvpEntry[]>([])
 
+// Attendance
+const attendanceLogs = ref<AttendanceLog[]>([])
+const attendanceTab = ref<'logs' | 'manual' | 'qr'>('logs')
+const manualUserId = ref('')
+const manualSaving = ref(false)
+const attendanceMessage = ref<{ type: 'success' | 'error'; text: string } | null>(null)
+const { scannedToken, scanning, error: scanError, start: startScanner, stop: stopScanner, reset: resetScanner } = useQRScanner('event-qr-reader')
+const qrProcessing = ref(false)
+
 onMounted(async () => {
-    await Promise.all([fetchEvent(), fetchRsvps()])
+    await Promise.all([fetchEvent(), fetchRsvps(), fetchAttendance(), admin.fetchMembers()])
     loading.value = false
 })
 
@@ -131,6 +144,104 @@ async function removeCover() {
     ;(event.value as any).cover_photo_url = null
     message.value = { type: 'success', text: 'Cover photo removed.' }
     uploading.value = false
+}
+
+// Attendance functions
+async function fetchAttendance() {
+    const eventId = Number(route.params.id)
+    const { data } = await supabase
+        .from('tbl_attendance_logs')
+        .select('*')
+        .eq('event_id', eventId)
+        .order('logged_at', { ascending: false })
+    attendanceLogs.value = data ?? []
+}
+
+async function handleManualCheckIn() {
+    if (!manualUserId.value || !event.value) return
+    manualSaving.value = true
+    attendanceMessage.value = null
+
+    const member = admin.members.find(m => m.user_id === manualUserId.value)
+    const userName = `${auth.user?.first_name ?? ''} ${auth.user?.last_name ?? ''}`.trim()
+
+    const { error } = await supabase.from('tbl_attendance_logs').insert({
+        user_id: manualUserId.value,
+        event_id: event.value.id,
+        event_title: event.value.event_title,
+        input_method: 'manual',
+        log_date: new Date().toISOString().split('T')[0],
+        logged_at: new Date().toISOString(),
+        logged_by: auth.session?.user.id ?? null,
+        logged_by_name: userName,
+        logged_location_id: auth.profile?.satellite_church_id ?? null,
+        logged_location_name: auth.profile?.satellite_church_name ?? null,
+    })
+
+    if (error) {
+        attendanceMessage.value = { type: 'error', text: error.message }
+    } else {
+        attendanceMessage.value = { type: 'success', text: `${member?.first_name} ${member?.last_name} checked in.` }
+        manualUserId.value = ''
+        await fetchAttendance()
+    }
+    manualSaving.value = false
+}
+
+async function handleEventQRScan() {
+    if (!scannedToken.value || !event.value) return
+    qrProcessing.value = true
+    attendanceMessage.value = null
+
+    const { data: profile } = await supabase
+        .from('tbl_members_profile')
+        .select('user_id, first_name, last_name')
+        .eq('qr_token', scannedToken.value)
+        .maybeSingle()
+
+    if (!profile) {
+        attendanceMessage.value = { type: 'error', text: 'QR code not recognized.' }
+        qrProcessing.value = false
+        resetScanner()
+        return
+    }
+
+    const userName = `${auth.user?.first_name ?? ''} ${auth.user?.last_name ?? ''}`.trim()
+
+    const { error } = await supabase.from('tbl_attendance_logs').insert({
+        user_id: profile.user_id,
+        event_id: event.value.id,
+        event_title: event.value.event_title,
+        input_method: 'QR',
+        log_date: new Date().toISOString().split('T')[0],
+        logged_at: new Date().toISOString(),
+        logged_by: auth.session?.user.id ?? null,
+        logged_by_name: userName,
+        logged_location_id: auth.profile?.satellite_church_id ?? null,
+        logged_location_name: auth.profile?.satellite_church_name ?? null,
+    })
+
+    if (error) {
+        attendanceMessage.value = { type: 'error', text: error.message }
+    } else {
+        attendanceMessage.value = { type: 'success', text: `${profile.first_name} ${profile.last_name} scanned in!` }
+        await fetchAttendance()
+    }
+    qrProcessing.value = false
+    resetScanner()
+}
+
+watch(scannedToken, (val) => {
+    if (val) handleEventQRScan()
+})
+
+async function onAttendanceTabChange(tab: typeof attendanceTab.value) {
+    attendanceTab.value = tab
+    if (tab === 'qr') {
+        await nextTick()
+    } else {
+        stopScanner()
+    }
 }
 
 const goingList = computed(() => allRsvps.value.filter((r) => r.status === 'going'))
@@ -293,6 +404,125 @@ function getInitials(first: string, last: string) {
                         <div class="flex flex-wrap items-center gap-3 text-xs text-gray-400 pt-5 border-t border-gray-100 mt-5">
                             <span v-if="event.created_by_name">Created by {{ event.created_by_name }}</span>
                             <span v-if="event.created_at">&middot; {{ formatFullDate(event.created_at) }}</span>
+                        </div>
+                    </div>
+
+                    <!-- Attendance Section -->
+                    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 sm:p-8">
+                        <h2 class="font-heading font-semibold text-navy text-lg mb-5">
+                            Attendance
+                            <span class="text-sm font-normal text-gray-400 ml-2">{{ attendanceLogs.length }} logged</span>
+                        </h2>
+
+                        <!-- Attendance tabs -->
+                        <div class="flex gap-1 bg-gray-100 rounded-lg p-1 mb-5">
+                            <button
+                                v-for="tab in [
+                                    { key: 'logs' as const, label: 'Logs' },
+                                    { key: 'manual' as const, label: 'Manual Check-In' },
+                                    { key: 'qr' as const, label: 'QR Scan' },
+                                ]"
+                                :key="tab.key"
+                                class="flex-1 px-3 py-2 text-sm font-medium rounded-md transition-colors"
+                                :class="attendanceTab === tab.key ? 'bg-white text-navy shadow-sm' : 'text-gray-500 hover:text-gray-700'"
+                                @click="onAttendanceTabChange(tab.key)"
+                            >
+                                {{ tab.label }}
+                            </button>
+                        </div>
+
+                        <!-- Attendance message -->
+                        <p
+                            v-if="attendanceMessage"
+                            class="text-sm rounded-lg px-4 py-2 mb-4"
+                            :class="attendanceMessage.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'"
+                        >
+                            {{ attendanceMessage.text }}
+                        </p>
+
+                        <!-- Logs tab -->
+                        <div v-if="attendanceTab === 'logs'">
+                            <div v-if="!attendanceLogs.length" class="text-center py-8 text-gray-400 text-sm">No attendance logged yet.</div>
+                            <div v-else class="space-y-1 max-h-96 overflow-y-auto">
+                                <div
+                                    v-for="log in attendanceLogs"
+                                    :key="log.id"
+                                    class="flex items-center justify-between p-3 rounded-xl hover:bg-gray-50 transition-colors"
+                                >
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-8 h-8 rounded-full bg-navy/6 flex items-center justify-center text-xs font-bold text-navy/50 shrink-0">
+                                            {{ (log.logged_by_name ?? '?')[0] }}
+                                        </div>
+                                        <div>
+                                            <p class="text-sm font-medium text-gray-900">{{ log.logged_by_name ?? '—' }}</p>
+                                            <p class="text-xs text-gray-400">{{ formatTime(log.logged_at) }}</p>
+                                        </div>
+                                    </div>
+                                    <span
+                                        class="text-xs px-2 py-0.5 rounded-full font-medium"
+                                        :class="{
+                                            'bg-blue-100 text-blue-700': log.input_method === 'QR',
+                                            'bg-green-100 text-green-700': log.input_method === 'self',
+                                            'bg-gray-100 text-gray-600': log.input_method === 'manual',
+                                        }"
+                                    >
+                                        {{ log.input_method }}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Manual check-in tab -->
+                        <div v-else-if="attendanceTab === 'manual'">
+                            <form @submit.prevent="handleManualCheckIn" class="space-y-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Member</label>
+                                    <select
+                                        v-model="manualUserId"
+                                        required
+                                        class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-navy/30"
+                                    >
+                                        <option value="" disabled>Select member</option>
+                                        <option
+                                            v-for="m in admin.members.filter(m => m.status === 'approved')"
+                                            :key="m.user_id"
+                                            :value="m.user_id"
+                                        >
+                                            {{ m.first_name }} {{ m.last_name }}
+                                        </option>
+                                    </select>
+                                </div>
+                                <button
+                                    type="submit"
+                                    :disabled="manualSaving || !manualUserId"
+                                    class="w-full py-2.5 bg-navy text-white font-semibold rounded-lg hover:bg-navy-700 disabled:opacity-50 transition-colors text-sm"
+                                >
+                                    {{ manualSaving ? 'Checking in...' : 'Check In' }}
+                                </button>
+                            </form>
+                        </div>
+
+                        <!-- QR scan tab -->
+                        <div v-else-if="attendanceTab === 'qr'">
+                            <div id="event-qr-reader" class="w-full mb-4 rounded-lg overflow-hidden" />
+                            <div class="flex gap-3">
+                                <button
+                                    v-if="!scanning"
+                                    class="flex-1 py-2.5 bg-navy text-white font-semibold rounded-lg hover:bg-navy-700 transition-colors text-sm"
+                                    @click="startScanner"
+                                >
+                                    Start Scanning
+                                </button>
+                                <button
+                                    v-else
+                                    class="flex-1 py-2.5 bg-red-500 text-white font-semibold rounded-lg hover:bg-red-600 transition-colors text-sm"
+                                    @click="stopScanner"
+                                >
+                                    Stop
+                                </button>
+                            </div>
+                            <p v-if="scanError" class="text-sm text-red-600 mt-3">{{ scanError }}</p>
+                            <p v-if="qrProcessing" class="text-sm text-navy mt-3">Processing scan...</p>
                         </div>
                     </div>
 

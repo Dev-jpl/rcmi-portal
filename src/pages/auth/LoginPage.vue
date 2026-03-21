@@ -92,8 +92,12 @@ async function handleLogin() {
         router.push({ name: 'pending' })
     } else if (redirect && redirect !== '/login' && redirect !== '/register') {
         router.push(redirect)
-    } else if (auth.isAdmin || auth.isLeader) {
-        router.push({ name: 'admin-dashboard' })
+    } else if (auth.canAccessAdmin) {
+        const target = auth.isAdmin ? 'admin-dashboard'
+            : auth.isPastor ? 'admin-my-team'
+            : auth.isNetworkLeader ? 'admin-my-network'
+            : 'admin-my-lpath'
+        router.push({ name: target })
     } else {
         router.push({ name: 'member-dashboard' })
     }
@@ -175,6 +179,13 @@ async function handleLogin() {
                     </svg>
                     {{ passwordError }}
                 </p>
+            </div>
+
+            <!-- Forgot password -->
+            <div class="flex justify-end -mt-1">
+                <router-link :to="{ name: 'forgot-password' }" class="text-xs text-navy font-medium hover:text-navy-600 transition-colors">
+                    Forgot password?
+                </router-link>
             </div>
 
             <!-- Server Error -->
