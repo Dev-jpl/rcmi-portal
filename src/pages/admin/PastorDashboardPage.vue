@@ -2,6 +2,8 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/auth.store'
+import LeadershipGraph from '@/components/common/LeadershipGraph.vue'
+import type { Node, Edge } from '@vue-flow/core'
 
 const auth = useAuthStore()
 
@@ -28,7 +30,7 @@ interface LpathMember {
 interface Church { id: number; church_name: string }
 interface PastorOption { id: number; user_id: string; user?: { first_name: string | null; last_name: string | null } }
 
-const activeTab = ref<'network' | 'lpath-leaders' | 'lpath-members'>('network')
+const activeTab = ref<'network' | 'lpath-leaders' | 'lpath-members' | 'hierarchy'>('network')
 const loading = ref(true)
 const search = ref('')
 
@@ -165,10 +167,51 @@ function pastorDisplayName(p: PastorOption) {
     return [p.user?.first_name, p.user?.last_name].filter(Boolean).join(' ')
 }
 
+// Hierarchy graph
+const graphNodes = computed<Node[]>(() => {
+    const nodes: Node[] = []
+    const pastor = pastors.value.find(p => p.user_id === selectedPastorId.value)
+    const pastorName = pastor ? pastorDisplayName(pastor) : (auth.user ? displayName(auth.user) : 'Pastor')
+    nodes.push({ id: `pastor-${selectedPastorId.value}`, type: 'leadership', position: { x: 0, y: 0 }, data: { name: pastorName, role: 'Pastor', active: true } })
+    for (const nl of networkLeaders.value) {
+        nodes.push({ id: `nl-${nl.id}`, type: 'leadership', position: { x: 0, y: 0 }, data: { name: displayName(nl.user), role: 'Network Leader', active: nl.is_active === 'Y' } })
+    }
+    for (const ll of lpathLeaders.value) {
+        nodes.push({ id: `ll-${ll.id}`, type: 'leadership', position: { x: 0, y: 0 }, data: { name: displayName(ll.user), role: 'L-Path Leader', active: ll.is_active === 'Y' } })
+    }
+    for (const m of lpathMembers.value) {
+        nodes.push({ id: `m-${m.id}`, type: 'leadership', position: { x: 0, y: 0 }, data: { name: displayName(m.user), role: 'Member', active: m.is_active === 'Y' } })
+    }
+    return nodes
+})
+
+const graphEdges = computed<Edge[]>(() => {
+    const edges: Edge[] = []
+    for (const nl of networkLeaders.value) {
+        edges.push({ id: `e-pastor-nl-${nl.id}`, source: `pastor-${selectedPastorId.value}`, target: `nl-${nl.id}` })
+    }
+    for (const ll of lpathLeaders.value) {
+        if (ll.network_id != null) {
+            edges.push({ id: `e-nl-ll-${ll.id}`, source: `nl-${ll.network_id}`, target: `ll-${ll.id}` })
+        }
+    }
+    for (const m of lpathMembers.value) {
+        // Link to lpath leader if available, else to network leader
+        const llMatch = lpathLeaders.value.find(ll => ll.user_id === m.lpath_leader_id)
+        if (llMatch) {
+            edges.push({ id: `e-ll-m-${m.id}`, source: `ll-${llMatch.id}`, target: `m-${m.id}` })
+        } else if (m.network_leader_id != null) {
+            edges.push({ id: `e-nl-m-${m.id}`, source: `nl-${m.network_leader_id}`, target: `m-${m.id}` })
+        }
+    }
+    return edges
+})
+
 const tabs = [
     { key: 'network' as const, label: 'Network Leaders', count: () => networkLeaders.value.length },
     { key: 'lpath-leaders' as const, label: 'L-Path Leaders', count: () => lpathLeaders.value.length },
     { key: 'lpath-members' as const, label: 'L-Path Members', count: () => lpathMembers.value.length },
+    { key: 'hierarchy' as const, label: 'Hierarchy', count: () => null },
 ]
 </script>
 
@@ -208,23 +251,23 @@ const tabs = [
         </div>
 
         <!-- Tabs -->
-        <div class="flex gap-1 bg-gray-100 rounded-lg p-1 mb-4 overflow-x-auto">
+        <div class="inline-flex max-w-full gap-0.5 bg-gray-100/80 rounded-md p-0.5 mb-4 overflow-x-auto">
             <button
                 v-for="tab in tabs"
                 :key="tab.key"
-                class="flex-1 px-4 py-2 text-sm font-medium rounded-md transition-colors whitespace-nowrap"
-                :class="activeTab === tab.key ? 'bg-white text-navy shadow-sm' : 'text-gray-500 hover:text-gray-700'"
+                class="px-2.5 py-1 text-[11px] font-medium rounded transition-all whitespace-nowrap"
+                :class="activeTab === tab.key ? 'bg-white text-navy shadow-sm' : 'text-gray-400 hover:text-gray-600'"
                 @click="activeTab = tab.key"
             >
                 {{ tab.label }}
-                <span class="ml-1.5 text-xs px-1.5 py-0.5 rounded-full" :class="activeTab === tab.key ? 'bg-navy/10 text-navy' : 'bg-gray-200 text-gray-500'">
+                <span v-if="tab.count() !== null" class="ml-1 text-[10px] tabular-nums" :class="activeTab === tab.key ? 'text-navy/50' : 'text-gray-300'">
                     {{ tab.count() }}
                 </span>
             </button>
         </div>
 
         <!-- Search -->
-        <div class="mb-4">
+        <div v-if="activeTab !== 'hierarchy'" class="mb-4">
             <input
                 v-model="search"
                 type="text"
@@ -360,6 +403,11 @@ const tabs = [
                     </table>
                 </div>
             </div>
+        </template>
+
+        <!-- Hierarchy Tab -->
+        <template v-else-if="activeTab === 'hierarchy'">
+            <LeadershipGraph :nodes="graphNodes" :edges="graphEdges" />
         </template>
     </div>
 </template>

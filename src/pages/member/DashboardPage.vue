@@ -15,6 +15,7 @@ import { useAttendanceStore } from '@/stores/attendance.store'
 import { useMemberStore } from '@/stores/member.store'
 import { useAnnouncementStore } from '@/stores/announcement.store'
 import { useRsvp } from '@/composables/useRsvp'
+import QrCodeModal from '@/components/common/QrCodeModal.vue'
 import { supabase } from '@/lib/supabase'
 import type { Tables } from '@/types/database.types'
 
@@ -26,6 +27,7 @@ const member = useMemberStore()
 const announcementStore = useAnnouncementStore()
 const { rsvps, rsvpCounts, fetchRsvps, setRsvp } = useRsvp()
 
+const showQr = ref(false)
 const upcomingEvents = ref<Tables<'tbl_events'>[]>([])
 const birthdays = ref<{ name: string; birthday: string; daysUntil: number }[]>([])
 const pageLoading = ref(true)
@@ -193,18 +195,33 @@ function getRsvpCount(eventId: number) {
         <div class="relative overflow-hidden rounded-2xl mb-8">
             <div class="absolute inset-0 bg-gradient-to-br from-navy via-navy-700 to-navy-600" />
             <div class="absolute inset-0 opacity-[0.04]" style="background-image: radial-gradient(circle at 20% 50%, white 1px, transparent 1px); background-size: 24px 24px;" />
-            <div class="relative px-6 py-8 sm:px-8 sm:py-10">
-                <p class="text-navy-200 text-sm font-medium mb-1">
-                    {{ new Date().toLocaleDateString('en', { weekday: 'long', month: 'long', day: 'numeric' }) }}
-                </p>
-                <h1 class="text-2xl sm:text-3xl font-heading font-bold text-white mb-2">
-                    {{ greeting }}, {{ auth.user?.first_name }}
-                </h1>
-                <p class="text-white/60 text-sm">
-                    {{ auth.profile?.satellite_church_name ?? 'RCMI' }} Member
-                </p>
+            <div class="relative px-6 py-8 sm:px-8 sm:py-10 flex items-center justify-between gap-4">
+                <div>
+                    <p class="text-navy-200 text-sm font-medium mb-1">
+                        {{ new Date().toLocaleDateString('en', { weekday: 'long', month: 'long', day: 'numeric' }) }}
+                    </p>
+                    <h1 class="text-2xl sm:text-3xl font-heading font-bold text-white mb-2">
+                        {{ greeting }}, {{ auth.user?.first_name }}
+                    </h1>
+                    <p class="text-white/60 text-sm">
+                        {{ auth.profile?.satellite_church_name ?? 'RCMI' }} Member
+                    </p>
+                </div>
+                <!-- QR Quick Access -->
+                <button
+                    @click="showQr = true"
+                    class="shrink-0 flex flex-col items-center gap-1.5 px-4 py-3 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/10 backdrop-blur-sm transition-all duration-200 group cursor-pointer"
+                >
+                    <svg class="w-8 h-8 text-white/80 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 013.75 9.375v-4.5zM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5zM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M6.75 6.75h.75v.75h-.75v-.75zM6.75 16.5h.75v.75h-.75v-.75zM16.5 6.75h.75v.75h-.75v-.75zM13.5 13.5h.75v.75h-.75v-.75zM13.5 19.5h.75v.75h-.75v-.75zM19.5 13.5h.75v.75h-.75v-.75zM19.5 19.5h.75v.75h-.75v-.75zM16.5 16.5h.75v.75h-.75v-.75z" />
+                    </svg>
+                    <span class="text-[11px] font-medium text-white/70 group-hover:text-white/90 transition-colors">My QR</span>
+                </button>
             </div>
         </div>
+
+        <QrCodeModal :open="showQr" @close="showQr = false" />
 
         <!-- Loading skeleton -->
         <template v-if="pageLoading">

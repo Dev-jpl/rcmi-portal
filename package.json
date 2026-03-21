@@ -17,7 +17,9 @@
     "preinstall": "corepack enable && corepack prepare pnpm@latest --activate"
   },
   "dependencies": {
+    "@dagrejs/dagre": "^2.0.4",
     "@supabase/supabase-js": "^2.99.2",
+    "@vue-flow/core": "^1.48.2",
     "chart.js": "^4.5.1",
     "html5-qrcode": "^2.3.8",
     "leaflet": "^1.9.4",
@@ -56,6 +58,8 @@
     "node": "^20.19.0 || >=22.12.0"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["esbuild"]
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
   }
 }

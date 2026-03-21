@@ -3,11 +3,13 @@ import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth.store'
 import NotificationBell from '@/components/common/NotificationBell.vue'
+import QrCodeModal from '@/components/common/QrCodeModal.vue'
 
 const auth = useAuthStore()
 const router = useRouter()
 const sidebarOpen = ref(false)
 const showUserMenu = ref(false)
+const showQr = ref(false)
 
 
 const icons = {
@@ -120,7 +122,7 @@ function switchToMember() {
 
         <!-- Sidebar -->
         <aside
-            class="fixed lg:static inset-y-0 left-0 z-40 w-[272px] transform transition-transform duration-300 ease-out lg:translate-x-0 flex flex-col text-white"
+            class="fixed inset-y-0 left-0 z-40 w-[272px] transform transition-transform duration-300 ease-out lg:translate-x-0 lg:sticky lg:top-0 lg:h-screen flex flex-col text-white"
             :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full'"
             style="background: linear-gradient(180deg, #060e2a 0%, #091f55 100%);">
             <!-- Brand -->
@@ -227,15 +229,13 @@ function switchToMember() {
                     </svg>
                 </button>
                 <div class="flex-1" />
-                <NotificationBell />
-                <router-link :to="{ name: 'member-dashboard' }"
-                    class="flex items-center gap-1.5 text-sm text-gray-400 hover:text-navy transition-colors">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
-                            d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" />
+                <button @click="showQr = true" class="p-2 rounded-xl hover:bg-gray-100 text-gray-400 hover:text-navy transition-colors" title="My QR Code">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 013.75 9.375v-4.5zM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5zM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M6.75 6.75h.75v.75h-.75v-.75zM6.75 16.5h.75v.75h-.75v-.75zM16.5 6.75h.75v.75h-.75v-.75zM13.5 13.5h.75v.75h-.75v-.75zM13.5 19.5h.75v.75h-.75v-.75zM19.5 13.5h.75v.75h-.75v-.75zM19.5 19.5h.75v.75h-.75v-.75zM16.5 16.5h.75v.75h-.75v-.75z" />
                     </svg>
-                    <span class="hidden sm:inline">Member View</span>
-                </router-link>
+                </button>
+                <NotificationBell />
             </header>
 
             <!-- Page content -->
@@ -244,4 +244,6 @@ function switchToMember() {
             </main>
         </div>
     </div>
+
+    <QrCodeModal :open="showQr" @close="showQr = false" />
 </template>

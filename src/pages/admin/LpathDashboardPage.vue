@@ -2,6 +2,8 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/auth.store'
+import LeadershipGraph from '@/components/common/LeadershipGraph.vue'
+import type { Node, Edge } from '@vue-flow/core'
 
 const auth = useAuthStore()
 const currentUserId = computed(() => auth.user?.id ?? '')
@@ -84,10 +86,32 @@ function churchName(id: number | null) {
     return churches.value.find(c => c.id === id)?.church_name ?? '—'
 }
 
+const activeTab = ref<'members' | 'hierarchy'>('members')
+
 function formatDate(d: string | null) {
     if (!d) return '—'
     return new Date(d).toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric' })
 }
+
+// Hierarchy graph
+const graphNodes = computed<Node[]>(() => {
+    const nodes: Node[] = []
+    const ll = lpathLeadersList.value.find(l => l.user_id === selectedLeaderUserId.value)
+    const llName = ll ? displayName(ll.user) : (auth.user ? displayName(auth.user) : 'L-Path Leader')
+    nodes.push({ id: `ll-${selectedLeaderUserId.value}`, type: 'leadership', position: { x: 0, y: 0 }, data: { name: llName, role: 'L-Path Leader', active: true } })
+    for (const m of members.value) {
+        nodes.push({ id: `m-${m.id}`, type: 'leadership', position: { x: 0, y: 0 }, data: { name: displayName(m.user), role: 'Member', active: m.is_active === 'Y' } })
+    }
+    return nodes
+})
+
+const graphEdges = computed<Edge[]>(() => {
+    return members.value.map(m => ({
+        id: `e-ll-m-${m.id}`,
+        source: `ll-${selectedLeaderUserId.value}`,
+        target: `m-${m.id}`,
+    }))
+})
 </script>
 
 <template>
@@ -120,6 +144,24 @@ function formatDate(d: string | null) {
             </div>
         </div>
 
+        <!-- Tabs -->
+        <div class="inline-flex max-w-full gap-0.5 bg-gray-100/80 rounded-md p-0.5 mb-4 overflow-x-auto">
+            <button
+                v-for="tab in [{ key: 'members' as const, label: 'Members' }, { key: 'hierarchy' as const, label: 'Hierarchy' }]"
+                :key="tab.key"
+                class="px-2.5 py-1 text-[11px] font-medium rounded transition-all whitespace-nowrap"
+                :class="activeTab === tab.key ? 'bg-white text-navy shadow-sm' : 'text-gray-400 hover:text-gray-600'"
+                @click="activeTab = tab.key"
+            >
+                {{ tab.label }}
+                <span v-if="tab.key === 'members'" class="ml-1 text-[10px] tabular-nums" :class="activeTab === tab.key ? 'text-navy/50' : 'text-gray-300'">
+                    {{ members.length }}
+                </span>
+            </button>
+        </div>
+
+        <!-- Members Tab -->
+        <template v-if="activeTab === 'members'">
         <!-- Search -->
         <div class="mb-4">
             <input v-model="search" type="text" placeholder="Search by name or email..."
@@ -167,5 +209,11 @@ function formatDate(d: string | null) {
                 </table>
             </div>
         </div>
+        </template>
+
+        <!-- Hierarchy Tab -->
+        <template v-else-if="activeTab === 'hierarchy'">
+            <LeadershipGraph :nodes="graphNodes" :edges="graphEdges" />
+        </template>
     </div>
 </template>
