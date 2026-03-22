@@ -78,8 +78,19 @@ export const memberRoutes: RouteRecordRaw[] = [
             },
             {
                 path: 'directory',
-                name: 'member-directory',
-                component: () => import('@/pages/member/MemberDirectoryPage.vue')
+                children: [
+                    {
+                        path: '',
+                        name: 'member-directory',
+                        component: () => import('@/pages/member/MemberDirectoryPage.vue')
+                    },
+                    {
+                        path: ':userId',
+                        name: 'member-profile-view',
+                        component: () => import('@/pages/member/MemberProfileViewPage.vue'),
+                        props: true
+                    }
+                ]
             }
         ]
     }
