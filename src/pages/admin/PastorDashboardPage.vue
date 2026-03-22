@@ -33,6 +33,7 @@ interface PastorOption { id: number; user_id: string; user?: { first_name: strin
 const activeTab = ref<'network' | 'lpath-leaders' | 'lpath-members' | 'hierarchy'>('network')
 const loading = ref(true)
 const search = ref('')
+const message = ref<{ type: 'success' | 'error'; text: string } | null>(null)
 
 const networkLeaders = ref<NetworkLeader[]>([])
 const lpathLeaders = ref<LpathLeader[]>([])
@@ -41,12 +42,17 @@ const churches = ref<Church[]>([])
 const pastors = ref<PastorOption[]>([])
 const selectedPastorId = ref('')
 
+// Assign modal
+const showAssignModal = ref(false)
+const assignSaving = ref(false)
+const allMembers = ref<{ user_id: string; first_name: string | null; last_name: string | null; satellite_church_id: number | null }[]>([])
+const assignForm = ref({ user_id: '', date_started: new Date().toISOString().split('T')[0] })
+
 onMounted(async () => {
     if (!isScopedView.value) {
         await fetchPastors()
     }
-    await fetchChurches()
-    // For scoped view, set pastor to current user
+    await Promise.all([fetchChurches(), fetchAllMembers()])
     if (isScopedView.value) {
         selectedPastorId.value = currentUserId.value
     } else if (pastors.value.length) {
@@ -55,6 +61,54 @@ onMounted(async () => {
     await fetchAll()
     loading.value = false
 })
+
+async function fetchAllMembers() {
+    const { data } = await supabase
+        .from('tbl_members_profile')
+        .select('user_id, first_name, last_name, satellite_church_id')
+        .eq('status', 'approved')
+        .order('first_name')
+    allMembers.value = data ?? []
+}
+
+function openAssignModal() {
+    assignForm.value = { user_id: '', date_started: new Date().toISOString().split('T')[0] }
+    showAssignModal.value = true
+}
+
+// Compute available members (not already assigned as network leaders under this pastor)
+const availableMembers = computed(() => {
+    const existingIds = new Set(networkLeaders.value.map(n => n.user_id))
+    return allMembers.value.filter(m => !existingIds.has(m.user_id))
+})
+
+async function handleAssign() {
+    if (!assignForm.value.user_id || !selectedPastorId.value) return
+    assignSaving.value = true
+    message.value = null
+
+    const member = allMembers.value.find(m => m.user_id === assignForm.value.user_id)
+    const pastor = pastors.value.find(p => p.user_id === selectedPastorId.value)
+    const pastorName = pastor ? pastorDisplayName(pastor) : (auth.user ? displayName(auth.user) : null)
+
+    const { error } = await supabase.from('tbl_network_leaders').insert({
+        user_id: assignForm.value.user_id,
+        pastor_id: selectedPastorId.value,
+        pastor_name: pastorName,
+        church_id: member?.satellite_church_id ?? null,
+        date_started: assignForm.value.date_started || null,
+        is_active: 'Y',
+    })
+
+    if (error) {
+        message.value = { type: 'error', text: error.message }
+    } else {
+        message.value = { type: 'success', text: `${member?.first_name} ${member?.last_name} assigned as Network Leader.` }
+        showAssignModal.value = false
+        await fetchAll()
+    }
+    assignSaving.value = false
+}
 
 watch(selectedPastorId, async () => {
     if (selectedPastorId.value) {
@@ -222,6 +276,14 @@ const tabs = [
                 <h1 class="text-2xl font-heading font-bold text-navy">Network Management</h1>
                 <p class="text-sm text-gray-500 mt-1">Manage your network leaders, L-Path leaders, and L-Path members</p>
             </div>
+            <div class="flex items-center gap-3">
+                <button
+                    v-if="activeTab === 'network'"
+                    class="px-4 py-2 bg-navy text-white text-sm font-semibold rounded-lg hover:bg-navy-700 transition-colors"
+                    @click="openAssignModal"
+                >
+                    + Assign Network Leader
+                </button>
             <!-- Pastor selector for admins -->
             <select
                 v-if="!isScopedView && pastors.length"
@@ -232,7 +294,17 @@ const tabs = [
                     {{ pastorDisplayName(p) }}
                 </option>
             </select>
+            </div>
         </div>
+
+        <!-- Message -->
+        <p
+            v-if="message"
+            class="text-sm rounded-lg px-4 py-2 mb-4"
+            :class="message.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'"
+        >
+            {{ message.text }}
+        </p>
 
         <!-- Stats cards -->
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
@@ -409,5 +481,59 @@ const tabs = [
         <template v-else-if="activeTab === 'hierarchy'">
             <LeadershipGraph :nodes="graphNodes" :edges="graphEdges" />
         </template>
+
+        <!-- Assign Network Leader Modal -->
+        <Teleport to="body">
+            <Transition name="fade">
+                <div v-if="showAssignModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+                    <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="showAssignModal = false" />
+                    <div class="relative bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+                        <div class="flex items-center justify-between mb-5">
+                            <h3 class="font-heading font-semibold text-navy text-lg">Assign Network Leader</h3>
+                            <button class="text-gray-400 hover:text-gray-600" @click="showAssignModal = false">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+                        <form @submit.prevent="handleAssign" class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Member</label>
+                                <select
+                                    v-model="assignForm.user_id"
+                                    required
+                                    class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-navy/30"
+                                >
+                                    <option value="" disabled>Select member</option>
+                                    <option v-for="m in availableMembers" :key="m.user_id" :value="m.user_id">
+                                        {{ m.first_name }} {{ m.last_name }}
+                                    </option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Date Started</label>
+                                <input
+                                    v-model="assignForm.date_started"
+                                    type="date"
+                                    class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-navy/30"
+                                />
+                            </div>
+                            <button
+                                type="submit"
+                                :disabled="assignSaving"
+                                class="w-full py-2.5 bg-navy text-white font-semibold rounded-lg hover:bg-navy-700 disabled:opacity-50 transition-colors"
+                            >
+                                {{ assignSaving ? 'Assigning...' : 'Assign as Network Leader' }}
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </Transition>
+        </Teleport>
     </div>
 </template>
+
+<style scoped>
+.fade-enter-active, .fade-leave-active { transition: opacity 0.2s ease; }
+.fade-enter-from, .fade-leave-to { opacity: 0; }
+</style>

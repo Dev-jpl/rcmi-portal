@@ -69,6 +69,23 @@ export const adminRoutes: RouteRecordRaw[] = [
                 meta: { roles: ['super_admin', 'admin'] }
             },
             {
+                path: 'programs',
+                meta: { roles: ['super_admin', 'admin'] },
+                children: [
+                    {
+                        path: '',
+                        name: 'admin-programs',
+                        component: () => import('@/pages/admin/ProgramsPage.vue')
+                    },
+                    {
+                        path: ':id',
+                        name: 'admin-program-detail',
+                        component: () => import('@/pages/admin/ProgramDetailPage.vue'),
+                        props: true
+                    }
+                ]
+            },
+            {
                 path: 'attendance',
                 meta: { roles: ['super_admin', 'admin'] },
                 children: [

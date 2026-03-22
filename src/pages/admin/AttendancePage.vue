@@ -1,38 +1,41 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/auth.store'
 import { useAdminStore } from '@/stores/admin.store'
 import { useEventStore } from '@/stores/event.store'
 import { useQRScanner } from '@/composables/useQRScanner'
-import type { Tables } from '@/types/database.types'
-
-type AttendanceLog = Tables<'tbl_attendance_logs'>
 
 const auth = useAuthStore()
 const admin = useAdminStore()
 const eventStore = useEventStore()
 
 const activeTab = ref<'event' | 'member' | 'manual' | 'qr'>('event')
-const logs = ref<AttendanceLog[]>([])
+const logs = ref<any[]>([])
 const loading = ref(true)
 const search = ref('')
 const message = ref<{ type: 'success' | 'error'; text: string } | null>(null)
 
 // Manual check-in form
+const manualLogType = ref<'event' | 'program'>('event')
 const manualForm = ref({
     user_id: '',
     event_id: null as number | null,
+    program_id: null as number | null,
 })
 const manualSaving = ref(false)
 
 // QR scanner
 const { scannedToken, scanning, error: scanError, start: startScanner, stop: stopScanner, reset: resetScanner } = useQRScanner('qr-reader')
+const qrLogType = ref<'event' | 'program'>('event')
 const qrEventId = ref<number | null>(null)
+const qrProgramId = ref<number | null>(null)
 const qrProcessing = ref(false)
 
 // Default events from library
 const defaultEvents = ref<{ id: number; event_title: string }[]>([])
+// Programs from library
+const programs = ref<{ id: number; type: string }[]>([])
 
 async function fetchDefaultEvents() {
     const { data } = await supabase
@@ -41,6 +44,15 @@ async function fetchDefaultEvents() {
         .eq('is_active', true)
         .order('event_title')
     defaultEvents.value = data ?? []
+}
+
+async function fetchPrograms() {
+    const { data } = await supabase
+        .from('lib_programs')
+        .select('id, type')
+        .eq('is_active', true)
+        .order('type')
+    programs.value = data ?? []
 }
 
 // Merged list: real events + default events (with negative IDs to distinguish)
@@ -53,12 +65,6 @@ const allEventOptions = computed(() => {
     return [...real, ...defaults]
 })
 
-function getEventLabel(id: number | null) {
-    if (!id) return null
-    const opt = allEventOptions.value.find(o => o.id === id)
-    return opt?.label ?? null
-}
-
 // Resolve the real event title for logging (strip " (Default)" suffix)
 function getEventTitleForLog(id: number | null) {
     if (!id) return null
@@ -66,13 +72,17 @@ function getEventTitleForLog(id: number | null) {
         const evt = eventStore.events.find(e => e.id === id)
         return evt?.event_title ?? null
     }
-    // Default event (negative id)
     const de = defaultEvents.value.find(d => d.id === -id!)
     return de?.event_title ?? null
 }
 
+function getProgramName(id: number | null) {
+    if (!id) return null
+    return programs.value.find(p => p.id === id)?.type ?? null
+}
+
 onMounted(async () => {
-    await Promise.all([fetchLogs(), admin.fetchMembers(), eventStore.fetchEvents(), fetchDefaultEvents()])
+    await Promise.all([fetchLogs(), admin.fetchMembers(), eventStore.fetchEvents(), fetchDefaultEvents(), fetchPrograms()])
     loading.value = false
 })
 
@@ -96,63 +106,95 @@ const filtered = computed(() => {
     const q = search.value.toLowerCase()
     let list = logs.value
 
-    if (activeTab.value === 'member') {
-        // Group view — no additional filter
-    }
-
     if (q) {
         list = list.filter(
-            (l) =>
+            (l: any) =>
                 l.event_title?.toLowerCase().includes(q) ||
                 l.logged_by_name?.toLowerCase().includes(q) ||
                 l.logged_location_name?.toLowerCase().includes(q) ||
-                getMemberName(l.user_id).toLowerCase().includes(q),
+                getMemberName(l.user_id).toLowerCase().includes(q) ||
+                getLogTitle(l).toLowerCase().includes(q),
         )
     }
     return list
 })
 
-async function handleManualCheckIn() {
-    if (!manualForm.value.user_id || !manualForm.value.event_id) return
-    manualSaving.value = true
-    message.value = null
-
-    const eventTitle = getEventTitleForLog(manualForm.value.event_id)
-    const member = admin.members.find((m: any) => m.user_id === manualForm.value.user_id)
+function buildLogPayload(userId: string, logType: 'event' | 'program', eventId: number | null, programId: number | null, inputMethod: string) {
     const userName = `${auth.user?.first_name ?? ''} ${auth.user?.last_name ?? ''}`.trim()
-    // For default events (negative id), don't store the id — only the title
-    const realEventId = manualForm.value.event_id! > 0 ? manualForm.value.event_id : null
 
-    const { error } = await supabase.from('tbl_attendance_logs').insert({
-        user_id: manualForm.value.user_id,
+    if (logType === 'program') {
+        const programName = getProgramName(programId)
+        return {
+            user_id: userId,
+            log_type: 'program',
+            event_id: null,
+            event_title: programName,
+            program_id: programId,
+            input_method: inputMethod,
+            log_date: new Date().toISOString().split('T')[0],
+            logged_at: new Date().toISOString(),
+            logged_by: auth.session?.user.id ?? null,
+            logged_by_name: userName,
+            logged_location_id: auth.profile?.satellite_church_id ?? null,
+            logged_location_name: auth.profile?.satellite_church_name ?? null,
+        }
+    }
+
+    // Event
+    const eventTitle = getEventTitleForLog(eventId)
+    const realEventId = eventId && eventId > 0 ? eventId : null
+    return {
+        user_id: userId,
+        log_type: 'event',
         event_id: realEventId,
         event_title: eventTitle,
-        input_method: 'manual',
+        program_id: null,
+        input_method: inputMethod,
         log_date: new Date().toISOString().split('T')[0],
         logged_at: new Date().toISOString(),
         logged_by: auth.session?.user.id ?? null,
         logged_by_name: userName,
         logged_location_id: auth.profile?.satellite_church_id ?? null,
         logged_location_name: auth.profile?.satellite_church_name ?? null,
-    })
+    }
+}
+
+async function handleManualCheckIn() {
+    if (!manualForm.value.user_id) return
+    if (manualLogType.value === 'event' && !manualForm.value.event_id) return
+    if (manualLogType.value === 'program' && !manualForm.value.program_id) return
+    manualSaving.value = true
+    message.value = null
+
+    const member = admin.members.find((m: any) => m.user_id === manualForm.value.user_id)
+    const payload = buildLogPayload(
+        manualForm.value.user_id,
+        manualLogType.value,
+        manualForm.value.event_id,
+        manualForm.value.program_id,
+        'manual',
+    )
+
+    const { error } = await supabase.from('tbl_attendance_logs').insert(payload)
 
     if (error) {
         message.value = { type: 'error', text: error.message }
     } else {
         message.value = { type: 'success', text: `${member?.first_name} ${member?.last_name} checked in.` }
-        manualForm.value = { user_id: '', event_id: null }
+        manualForm.value = { user_id: '', event_id: null, program_id: null }
         await fetchLogs()
     }
     manualSaving.value = false
 }
 
-// QR scan handler — watch scannedToken
+// QR scan handler
 async function handleQRScan() {
-    if (!scannedToken.value || !qrEventId.value) return
+    if (!scannedToken.value) return
+    if (qrLogType.value === 'event' && !qrEventId.value) return
+    if (qrLogType.value === 'program' && !qrProgramId.value) return
     qrProcessing.value = true
     message.value = null
 
-    // Find member by qr_token
     const { data: profile } = await supabase
         .from('tbl_members_profile')
         .select('user_id, first_name, last_name')
@@ -166,22 +208,15 @@ async function handleQRScan() {
         return
     }
 
-    const eventTitle = getEventTitleForLog(qrEventId.value)
-    const userName = `${auth.user?.first_name ?? ''} ${auth.user?.last_name ?? ''}`.trim()
-    const realEventId = qrEventId.value! > 0 ? qrEventId.value : null
+    const payload = buildLogPayload(
+        profile.user_id,
+        qrLogType.value,
+        qrEventId.value,
+        qrProgramId.value,
+        'QR',
+    )
 
-    const { error } = await supabase.from('tbl_attendance_logs').insert({
-        user_id: profile.user_id,
-        event_id: realEventId,
-        event_title: eventTitle,
-        input_method: 'QR',
-        log_date: new Date().toISOString().split('T')[0],
-        logged_at: new Date().toISOString(),
-        logged_by: auth.session?.user.id ?? null,
-        logged_by_name: userName,
-        logged_location_id: auth.profile?.satellite_church_id ?? null,
-        logged_location_name: auth.profile?.satellite_church_name ?? null,
-    })
+    const { error } = await supabase.from('tbl_attendance_logs').insert(payload)
 
     if (error) {
         message.value = { type: 'error', text: error.message }
@@ -193,8 +228,6 @@ async function handleQRScan() {
     resetScanner()
 }
 
-// Watch for QR scan result
-import { watch } from 'vue'
 watch(scannedToken, (val) => {
     if (val) handleQRScan()
 })
@@ -203,7 +236,6 @@ async function onTabChange(tab: typeof activeTab.value) {
     activeTab.value = tab
     if (tab === 'qr') {
         await nextTick()
-        // Scanner started manually by user
     } else {
         stopScanner()
     }
@@ -213,6 +245,14 @@ function getMemberName(userId: string | null) {
     if (!userId) return '—'
     const m = admin.members.find(m => m.user_id === userId)
     return m ? `${m.first_name} ${m.last_name}` : '—'
+}
+
+function getLogTitle(log: any) {
+    return log.event_title ?? '—'
+}
+
+function getLogTypeBadge(log: any) {
+    return log.log_type === 'program' ? 'Program' : 'Event'
 }
 
 function formatDate(d: string | null) {
@@ -278,7 +318,32 @@ function formatTime(d: string | null) {
                         </option>
                     </select>
                 </div>
+
+                <!-- Log Type Toggle -->
                 <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Log For</label>
+                    <div class="inline-flex gap-0.5 bg-gray-100/80 rounded-md p-0.5">
+                        <button
+                            type="button"
+                            class="px-3 py-1.5 text-xs font-medium rounded transition-all"
+                            :class="manualLogType === 'event' ? 'bg-white text-navy shadow-sm' : 'text-gray-400 hover:text-gray-600'"
+                            @click="manualLogType = 'event'"
+                        >
+                            Event
+                        </button>
+                        <button
+                            type="button"
+                            class="px-3 py-1.5 text-xs font-medium rounded transition-all"
+                            :class="manualLogType === 'program' ? 'bg-white text-navy shadow-sm' : 'text-gray-400 hover:text-gray-600'"
+                            @click="manualLogType = 'program'"
+                        >
+                            Program
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Event Select -->
+                <div v-if="manualLogType === 'event'">
                     <label class="block text-sm font-medium text-gray-700 mb-1">Event</label>
                     <select
                         v-model="manualForm.event_id"
@@ -291,6 +356,22 @@ function formatTime(d: string | null) {
                         </option>
                     </select>
                 </div>
+
+                <!-- Program Select -->
+                <div v-else>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Program</label>
+                    <select
+                        v-model="manualForm.program_id"
+                        required
+                        class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-navy/30"
+                    >
+                        <option :value="null" disabled>Select program</option>
+                        <option v-for="p in programs" :key="p.id" :value="p.id">
+                            {{ p.type }}
+                        </option>
+                    </select>
+                </div>
+
                 <button
                     type="submit"
                     :disabled="manualSaving"
@@ -306,7 +387,31 @@ function formatTime(d: string | null) {
             <div class="bg-white rounded-lg border border-gray-200 p-6">
                 <h2 class="font-heading font-semibold text-navy mb-4">QR Code Scanner</h2>
 
+                <!-- Log Type Toggle -->
                 <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Log For</label>
+                    <div class="inline-flex gap-0.5 bg-gray-100/80 rounded-md p-0.5">
+                        <button
+                            type="button"
+                            class="px-3 py-1.5 text-xs font-medium rounded transition-all"
+                            :class="qrLogType === 'event' ? 'bg-white text-navy shadow-sm' : 'text-gray-400 hover:text-gray-600'"
+                            @click="qrLogType = 'event'"
+                        >
+                            Event
+                        </button>
+                        <button
+                            type="button"
+                            class="px-3 py-1.5 text-xs font-medium rounded transition-all"
+                            :class="qrLogType === 'program' ? 'bg-white text-navy shadow-sm' : 'text-gray-400 hover:text-gray-600'"
+                            @click="qrLogType = 'program'"
+                        >
+                            Program
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Event Select -->
+                <div v-if="qrLogType === 'event'" class="mb-4">
                     <label class="block text-sm font-medium text-gray-700 mb-1">Event</label>
                     <select
                         v-model="qrEventId"
@@ -320,12 +425,27 @@ function formatTime(d: string | null) {
                     </select>
                 </div>
 
+                <!-- Program Select -->
+                <div v-else class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Program</label>
+                    <select
+                        v-model="qrProgramId"
+                        required
+                        class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-navy/30"
+                    >
+                        <option :value="null" disabled>Select program first</option>
+                        <option v-for="p in programs" :key="p.id" :value="p.id">
+                            {{ p.type }}
+                        </option>
+                    </select>
+                </div>
+
                 <div id="qr-reader" class="w-full mb-4 rounded-lg overflow-hidden" />
 
                 <div class="flex gap-3">
                     <button
                         v-if="!scanning"
-                        :disabled="!qrEventId"
+                        :disabled="(qrLogType === 'event' && !qrEventId) || (qrLogType === 'program' && !qrProgramId)"
                         class="flex-1 py-2.5 bg-navy text-white font-semibold rounded-lg hover:bg-navy-700 disabled:opacity-50 transition-colors"
                         @click="startScanner"
                     >
@@ -351,7 +471,7 @@ function formatTime(d: string | null) {
                 <input
                     v-model="search"
                     type="text"
-                    placeholder="Search by event, name, or location..."
+                    placeholder="Search by event, program, name, or location..."
                     class="w-full sm:w-80 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-navy/30 focus:border-navy"
                 />
             </div>
@@ -369,7 +489,8 @@ function formatTime(d: string | null) {
                             <tr class="bg-gray-50 text-left text-gray-500 font-medium">
                                 <th class="px-4 py-3">Date</th>
                                 <th class="px-4 py-3">Member</th>
-                                <th class="px-4 py-3">Event</th>
+                                <th class="px-4 py-3">Type</th>
+                                <th class="px-4 py-3">Event / Program</th>
                                 <th class="px-4 py-3 hidden md:table-cell">Logged By</th>
                                 <th class="px-4 py-3 hidden md:table-cell">Location</th>
                                 <th class="px-4 py-3">Method</th>
@@ -380,7 +501,15 @@ function formatTime(d: string | null) {
                             <tr v-for="log in filtered" :key="log.id" class="hover:bg-gray-50/50">
                                 <td class="px-4 py-3 text-gray-900">{{ formatDate(log.log_date) }}</td>
                                 <td class="px-4 py-3 font-medium text-gray-900">{{ getMemberName(log.user_id) }}</td>
-                                <td class="px-4 py-3 font-medium text-gray-900">{{ log.event_title ?? '—' }}</td>
+                                <td class="px-4 py-3">
+                                    <span
+                                        class="text-xs px-2 py-0.5 rounded-full font-medium"
+                                        :class="log.log_type === 'program' ? 'bg-purple-50 text-purple-700' : 'bg-blue-50 text-blue-700'"
+                                    >
+                                        {{ getLogTypeBadge(log) }}
+                                    </span>
+                                </td>
+                                <td class="px-4 py-3 font-medium text-gray-900">{{ getLogTitle(log) }}</td>
                                 <td class="px-4 py-3 text-gray-500 hidden md:table-cell">{{ log.logged_by_name ?? '—' }}</td>
                                 <td class="px-4 py-3 text-gray-500 hidden md:table-cell">{{ log.logged_location_name ?? '—' }}</td>
                                 <td class="px-4 py-3">

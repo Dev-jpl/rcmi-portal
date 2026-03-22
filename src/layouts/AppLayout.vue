@@ -118,7 +118,7 @@ async function handleLogout() {
         >
             <!-- Brand -->
             <div class="flex items-center gap-3.5 px-6 h-16 border-b border-white/[0.08]">
-                <div class="w-9 h-9 rounded-xl bg-gold flex items-center justify-center shadow-lg shadow-gold/20">
+                <div class="w-9 h-9 rounded-lg bg-gold flex items-center justify-center shadow-lg shadow-gold/20">
                     <span class="text-navy font-heading font-extrabold text-sm tracking-tight">R</span>
                 </div>
                 <div class="leading-tight">
@@ -131,7 +131,7 @@ async function handleLogout() {
             <div v-if="hasOtherViews" class="px-4 pt-4 pb-2 relative">
                 <button
                     @click="viewDropdownOpen = !viewDropdownOpen"
-                    class="flex items-center gap-3 w-full px-3 py-2.5 bg-white/8 border border-white/10 rounded-xl text-sm text-white/90 font-medium cursor-pointer hover:bg-white/12 focus:outline-none focus:ring-2 focus:ring-gold/30 transition-all"
+                    class="flex items-center gap-3 w-full px-3 py-2.5 bg-white/8 border border-white/10 rounded-lg text-sm text-white/90 font-medium cursor-pointer hover:bg-white/12 focus:outline-none focus:ring-2 focus:ring-gold/30 transition-all"
                 >
                     <svg class="w-4.5 h-4.5 text-white/50 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" v-html="viewIcons['member']" />
                     <span class="flex-1 text-left">Member</span>
@@ -147,7 +147,7 @@ async function handleLogout() {
                     leave-from-class="opacity-100 translate-y-0 scale-100"
                     leave-to-class="opacity-0 -translate-y-1 scale-95"
                 >
-                    <div v-if="viewDropdownOpen" class="absolute left-4 right-4 mt-1.5 bg-[#0d1a3a] rounded-xl border border-white/10 shadow-xl shadow-black/30 overflow-hidden z-10">
+                    <div v-if="viewDropdownOpen" class="absolute left-4 right-4 mt-1.5 bg-[#0d1a3a] rounded-lg border border-white/10 shadow-xl shadow-black/30 overflow-hidden z-10">
                         <button
                             v-for="opt in viewOptions"
                             :key="opt"
@@ -175,7 +175,7 @@ async function handleLogout() {
                             v-for="item in group.items"
                             :key="item.label"
                             :to="item.to"
-                            class="group flex items-center gap-3.5 px-3.5 py-3 rounded-2xl text-sm font-medium text-white/50 hover:text-white/90 hover:bg-white/[0.07] transition-all duration-200"
+                            class="group flex items-center gap-3.5 px-3.5 py-3 rounded-lg text-sm font-medium text-white/50 hover:text-white/90 hover:bg-white/[0.07] transition-all duration-200"
                             active-class="!bg-white/[0.12] !text-gold"
                             @click="sidebarOpen = false"
                         >
@@ -199,7 +199,7 @@ async function handleLogout() {
                 >
                     <div
                         v-if="showUserMenu"
-                        class="absolute bottom-full left-3 right-3 mb-2 bg-[#0d1a3a] rounded-2xl border border-white/[0.1] shadow-xl shadow-black/30 overflow-hidden"
+                        class="absolute bottom-full left-3 right-3 mb-2 bg-[#0d1a3a] rounded-lg border border-white/[0.1] shadow-xl shadow-black/30 overflow-hidden"
                     >
                         <div class="px-4 py-3 border-b border-white/[0.08]">
                             <p class="text-xs text-white/40 truncate">{{ auth.user?.email }}</p>
@@ -231,9 +231,9 @@ async function handleLogout() {
                 <!-- Avatar button -->
                 <button
                     @click="showUserMenu = !showUserMenu"
-                    class="flex items-center gap-3 w-full px-3 py-2.5 rounded-2xl hover:bg-white/[0.06] transition-colors text-left"
+                    class="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg hover:bg-white/[0.06] transition-colors text-left"
                 >
-                    <div class="w-10 h-10 rounded-2xl bg-white/[0.1] flex items-center justify-center text-sm font-bold text-gold ring-1 ring-white/[0.08]">
+                    <div class="w-10 h-10 rounded-lg bg-white/[0.1] flex items-center justify-center text-sm font-bold text-gold ring-1 ring-white/[0.08]">
                         {{ auth.user?.first_name?.[0] }}{{ auth.user?.last_name?.[0] }}
                     </div>
                     <div class="min-w-0 flex-1">
@@ -255,7 +255,7 @@ async function handleLogout() {
             <!-- Topbar -->
             <header class="sticky top-0 z-20 bg-white/80 backdrop-blur-xl border-b border-gray-200/80 px-4 lg:px-6 h-14 flex items-center gap-4">
                 <button
-                    class="lg:hidden p-2 rounded-xl hover:bg-gray-100 text-gray-500 transition-colors"
+                    class="lg:hidden p-2 rounded-lg hover:bg-gray-100 text-gray-500 transition-colors"
                     @click="sidebarOpen = !sidebarOpen"
                 >
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -263,7 +263,7 @@ async function handleLogout() {
                     </svg>
                 </button>
                 <div class="flex-1" />
-                <button @click="showQr = true" class="p-2 rounded-xl hover:bg-gray-100 text-gray-400 hover:text-navy transition-colors" title="My QR Code">
+                <button @click="showQr = true" class="p-2 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-navy transition-colors" title="My QR Code">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 013.75 9.375v-4.5zM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5zM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5z" />
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M6.75 6.75h.75v.75h-.75v-.75zM6.75 16.5h.75v.75h-.75v-.75zM16.5 6.75h.75v.75h-.75v-.75zM13.5 13.5h.75v.75h-.75v-.75zM13.5 19.5h.75v.75h-.75v-.75zM19.5 13.5h.75v.75h-.75v-.75zM19.5 19.5h.75v.75h-.75v-.75zM16.5 16.5h.75v.75h-.75v-.75z" />

@@ -23,29 +23,115 @@ interface Church { id: number; church_name: string }
 
 const loading = ref(true)
 const search = ref('')
+const message = ref<{ type: 'success' | 'error'; text: string } | null>(null)
 const lpathLeadersList = ref<LpathLeaderOption[]>([])
 const selectedLeaderUserId = ref('')
+const selectedLeaderId = ref<number | null>(null) // the tbl_lpath_leaders.id
 const members = ref<LpathMember[]>([])
 const churches = ref<Church[]>([])
 
+// Assign modal
+const showAssignModal = ref(false)
+const assignSaving = ref(false)
+const allMembers = ref<{ user_id: string; first_name: string | null; last_name: string | null; satellite_church_id: number | null }[]>([])
+const assignForm = ref({ user_id: '', date_started: new Date().toISOString().split('T')[0] })
+
 onMounted(async () => {
-    await fetchChurches()
+    await Promise.all([fetchChurches(), fetchAllMembers()])
     if (isScopedView.value) {
         selectedLeaderUserId.value = currentUserId.value
+        // Get the leader record id
+        const { data } = await supabase
+            .from('tbl_lpath_leaders')
+            .select('id, network_id')
+            .eq('user_id', currentUserId.value)
+            .eq('is_active', 'Y')
+            .maybeSingle()
+        if (data) selectedLeaderId.value = data.id
     } else {
         const { data } = await supabase
             .from('tbl_lpath_leaders')
             .select('id, user_id, user:tbl_users!tbl_lpath_leaders_user_id_fkey(first_name, last_name)')
             .eq('is_active', 'Y')
-        lpathLeadersList.value = (data as LpathLeaderOption[]) ?? []
-        if (lpathLeadersList.value.length) selectedLeaderUserId.value = lpathLeadersList.value[0].user_id
+        lpathLeadersList.value = (data as (LpathLeaderOption & { id: number })[]) ?? []
+        if (lpathLeadersList.value.length) {
+            selectedLeaderUserId.value = lpathLeadersList.value[0].user_id
+            selectedLeaderId.value = (lpathLeadersList.value[0] as any).id
+        }
     }
     await fetchMembers()
     loading.value = false
 })
 
+async function fetchAllMembers() {
+    const { data } = await supabase
+        .from('tbl_members_profile')
+        .select('user_id, first_name, last_name, satellite_church_id')
+        .eq('status', 'approved')
+        .order('first_name')
+    allMembers.value = data ?? []
+}
+
+function openAssignModal() {
+    assignForm.value = { user_id: '', date_started: new Date().toISOString().split('T')[0] }
+    showAssignModal.value = true
+}
+
+const availableMembers = computed(() => {
+    const existingIds = new Set(members.value.map(m => m.user_id))
+    return allMembers.value.filter(m => !existingIds.has(m.user_id))
+})
+
+async function handleAssign() {
+    if (!assignForm.value.user_id || !selectedLeaderUserId.value) return
+    assignSaving.value = true
+    message.value = null
+
+    const member = allMembers.value.find(m => m.user_id === assignForm.value.user_id)
+    const leader = lpathLeadersList.value.find(l => l.user_id === selectedLeaderUserId.value)
+    const leaderName = leader ? displayName(leader.user) : (auth.user ? displayName(auth.user) : null)
+
+    // Get the network_leader_id from the lpath leader record
+    let networkLeaderId: number | null = null
+    let networkLeaderName: string | null = null
+    if (selectedLeaderId.value) {
+        const { data: llRecord } = await supabase
+            .from('tbl_lpath_leaders')
+            .select('network_id, network_name')
+            .eq('id', selectedLeaderId.value)
+            .maybeSingle()
+        if (llRecord) {
+            networkLeaderId = llRecord.network_id
+            networkLeaderName = llRecord.network_name
+        }
+    }
+
+    const { error } = await supabase.from('tbl_lpath_members').insert({
+        user_id: assignForm.value.user_id,
+        lpath_leader_id: selectedLeaderUserId.value,
+        lpath_leader_name: leaderName,
+        network_leader_id: networkLeaderId,
+        network_leader_name: networkLeaderName,
+        church_id: member?.satellite_church_id ?? null,
+        date_started: assignForm.value.date_started || null,
+        is_active: 'Y',
+    })
+
+    if (error) {
+        message.value = { type: 'error', text: error.message }
+    } else {
+        message.value = { type: 'success', text: `${member?.first_name} ${member?.last_name} assigned as L-Path Member.` }
+        showAssignModal.value = false
+        await fetchMembers()
+    }
+    assignSaving.value = false
+}
+
 watch(selectedLeaderUserId, async () => {
     if (selectedLeaderUserId.value) {
+        // Update selectedLeaderId
+        const ll = lpathLeadersList.value.find(l => l.user_id === selectedLeaderUserId.value)
+        selectedLeaderId.value = (ll as any)?.id ?? null
         loading.value = true
         await fetchMembers()
         loading.value = false
@@ -121,16 +207,34 @@ const graphEdges = computed<Edge[]>(() => {
                 <h1 class="text-2xl font-heading font-bold text-navy">My L-Path</h1>
                 <p class="text-sm text-gray-500 mt-1">Manage your L-Path members</p>
             </div>
-            <select
-                v-if="!isScopedView && lpathLeadersList.length"
-                v-model="selectedLeaderUserId"
-                class="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-navy/30"
-            >
-                <option v-for="l in lpathLeadersList" :key="l.user_id" :value="l.user_id">
-                    {{ displayName(l.user) }}
-                </option>
-            </select>
+            <div class="flex items-center gap-3">
+                <button
+                    v-if="activeTab === 'members'"
+                    class="px-4 py-2 bg-navy text-white text-sm font-semibold rounded-lg hover:bg-navy-700 transition-colors"
+                    @click="openAssignModal"
+                >
+                    + Assign Member
+                </button>
+                <select
+                    v-if="!isScopedView && lpathLeadersList.length"
+                    v-model="selectedLeaderUserId"
+                    class="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-navy/30"
+                >
+                    <option v-for="l in lpathLeadersList" :key="l.user_id" :value="l.user_id">
+                        {{ displayName(l.user) }}
+                    </option>
+                </select>
+            </div>
         </div>
+
+        <!-- Message -->
+        <p
+            v-if="message"
+            class="text-sm rounded-lg px-4 py-2 mb-4"
+            :class="message.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'"
+        >
+            {{ message.text }}
+        </p>
 
         <!-- Stats -->
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
@@ -215,5 +319,59 @@ const graphEdges = computed<Edge[]>(() => {
         <template v-else-if="activeTab === 'hierarchy'">
             <LeadershipGraph :nodes="graphNodes" :edges="graphEdges" />
         </template>
+
+        <!-- Assign Member Modal -->
+        <Teleport to="body">
+            <Transition name="fade">
+                <div v-if="showAssignModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+                    <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="showAssignModal = false" />
+                    <div class="relative bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+                        <div class="flex items-center justify-between mb-5">
+                            <h3 class="font-heading font-semibold text-navy text-lg">Assign Member</h3>
+                            <button class="text-gray-400 hover:text-gray-600" @click="showAssignModal = false">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+                        <form @submit.prevent="handleAssign" class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Member</label>
+                                <select
+                                    v-model="assignForm.user_id"
+                                    required
+                                    class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-navy/30"
+                                >
+                                    <option value="" disabled>Select member</option>
+                                    <option v-for="m in availableMembers" :key="m.user_id" :value="m.user_id">
+                                        {{ m.first_name }} {{ m.last_name }}
+                                    </option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Date Started</label>
+                                <input
+                                    v-model="assignForm.date_started"
+                                    type="date"
+                                    class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-navy/30"
+                                />
+                            </div>
+                            <button
+                                type="submit"
+                                :disabled="assignSaving"
+                                class="w-full py-2.5 bg-navy text-white font-semibold rounded-lg hover:bg-navy-700 disabled:opacity-50 transition-colors"
+                            >
+                                {{ assignSaving ? 'Assigning...' : 'Assign Member' }}
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </Transition>
+        </Teleport>
     </div>
 </template>
+
+<style scoped>
+.fade-enter-active, .fade-leave-active { transition: opacity 0.2s ease; }
+.fade-enter-from, .fade-leave-to { opacity: 0; }
+</style>

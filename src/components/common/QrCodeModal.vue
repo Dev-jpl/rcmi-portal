@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, watch, nextTick, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, nextTick, onBeforeUnmount, onMounted } from 'vue'
 import { useAuthStore } from '@/stores/auth.store'
+import { useEventStore } from '@/stores/event.store'
 import { useQR } from '@/composables/useQR'
 import { Html5Qrcode } from 'html5-qrcode'
 import { supabase } from '@/lib/supabase'
@@ -9,15 +10,83 @@ const props = defineProps<{ open: boolean }>()
 const emit = defineEmits<{ close: [] }>()
 
 const auth = useAuthStore()
+const eventStore = useEventStore()
 const { qrDataUrl, loading } = useQR(() => auth.profile?.qr_token)
 
 const activeTab = ref<'show' | 'scan'>('show')
 const scanResult = ref<string | null>(null)
 const scanError = ref<string | null>(null)
-const scanSuccess = ref<{ name: string } | null>(null)
+const scanSuccess = ref<{ name: string; title: string } | null>(null)
 const scanning = ref(false)
 
+// Scan config
+const scanLogType = ref<'event' | 'program'>('event')
+const scanEventId = ref<number | null>(null)
+const scanProgramId = ref<number | null>(null)
+
+// Data
+const defaultEvents = ref<{ id: number; event_title: string }[]>([])
+const programs = ref<{ id: number; type: string }[]>([])
+
+const allEventOptions = computed(() => {
+    const real = eventStore.events
+        .filter(e => e.is_active)
+        .map(e => ({ id: e.id, label: e.event_title }))
+    const defaults = defaultEvents.value
+        .map(d => ({ id: -d.id, label: `${d.event_title} (Default)` }))
+    return [...real, ...defaults]
+})
+
+const canStartScan = computed(() => {
+    if (scanLogType.value === 'event') return !!scanEventId.value
+    return !!scanProgramId.value
+})
+
 let scanner: Html5Qrcode | null = null
+let dataLoaded = false
+
+async function loadData() {
+    if (dataLoaded) return
+    await Promise.all([
+        eventStore.fetchEvents(),
+        fetchDefaultEvents(),
+        fetchPrograms(),
+    ])
+    dataLoaded = true
+}
+
+async function fetchDefaultEvents() {
+    const { data } = await supabase
+        .from('lib_default_events')
+        .select('id, event_title')
+        .eq('is_active', true)
+        .order('event_title')
+    defaultEvents.value = data ?? []
+}
+
+async function fetchPrograms() {
+    const { data } = await supabase
+        .from('lib_programs')
+        .select('id, type')
+        .eq('is_active', true)
+        .order('type')
+    programs.value = data ?? []
+}
+
+function getEventTitleForLog(id: number | null) {
+    if (!id) return null
+    if (id > 0) {
+        const evt = eventStore.events.find(e => e.id === id)
+        return evt?.event_title ?? null
+    }
+    const de = defaultEvents.value.find(d => d.id === -id!)
+    return de?.event_title ?? null
+}
+
+function getProgramName(id: number | null) {
+    if (!id) return null
+    return programs.value.find(p => p.id === id)?.type ?? null
+}
 
 async function startScanner() {
     scanResult.value = null
@@ -35,7 +104,7 @@ async function startScanner() {
             { facingMode: 'environment' },
             { fps: 10, qrbox: { width: 250, height: 250 } },
             onScanSuccess,
-            () => {} // ignore scan errors (no match yet)
+            () => {}
         )
     } catch (e: any) {
         scanError.value = e?.message ?? 'Could not access camera'
@@ -57,28 +126,74 @@ async function onScanSuccess(decodedText: string) {
     scanResult.value = decodedText
 
     // Look up member by qr_token
-    const { data, error: err } = await supabase
-        .from('tbl_users')
-        .select('first_name, last_name')
+    const { data: profile } = await supabase
+        .from('tbl_members_profile')
+        .select('user_id, first_name, last_name')
         .eq('qr_token', decodedText)
-        .single()
+        .maybeSingle()
 
-    if (err || !data) {
+    if (!profile) {
         scanError.value = 'Member not found for this QR code'
+        return
+    }
+
+    // Build attendance log
+    const userName = `${auth.user?.first_name ?? ''} ${auth.user?.last_name ?? ''}`.trim()
+    let title: string | null = null
+
+    const payload: Record<string, unknown> = {
+        user_id: profile.user_id,
+        input_method: 'QR',
+        log_date: new Date().toISOString().split('T')[0],
+        logged_at: new Date().toISOString(),
+        logged_by: auth.session?.user.id ?? null,
+        logged_by_name: userName,
+        logged_location_id: auth.profile?.satellite_church_id ?? null,
+        logged_location_name: auth.profile?.satellite_church_name ?? null,
+    }
+
+    if (scanLogType.value === 'program') {
+        title = getProgramName(scanProgramId.value)
+        payload.log_type = 'program'
+        payload.program_id = scanProgramId.value
+        payload.event_id = null
+        payload.event_title = title
     } else {
-        scanSuccess.value = { name: [data.first_name, data.last_name].filter(Boolean).join(' ') }
+        title = getEventTitleForLog(scanEventId.value)
+        const realEventId = scanEventId.value && scanEventId.value > 0 ? scanEventId.value : null
+        payload.log_type = 'event'
+        payload.event_id = realEventId
+        payload.event_title = title
+        payload.program_id = null
+    }
+
+    const { error } = await supabase.from('tbl_attendance_logs').insert(payload)
+
+    const memberName = `${profile.first_name} ${profile.last_name}`
+    if (error) {
+        scanError.value = error.message
+    } else {
+        scanSuccess.value = { name: memberName, title: title ?? '—' }
     }
 }
 
-// Stop scanner when tab changes or modal closes
-watch(activeTab, () => { stopScanner() })
+function resetScan() {
+    scanResult.value = null
+    scanError.value = null
+    scanSuccess.value = null
+}
+
+// Load data when scan tab is selected
+watch(activeTab, async (tab) => {
+    stopScanner()
+    if (tab === 'scan') await loadData()
+})
+
 watch(() => props.open, (open) => {
     if (!open) {
         stopScanner()
         activeTab.value = 'show'
-        scanResult.value = null
-        scanError.value = null
-        scanSuccess.value = null
+        resetScan()
     }
 })
 
@@ -108,7 +223,7 @@ onBeforeUnmount(() => { stopScanner() })
                     leave-from-class="opacity-100 scale-100 translate-y-0"
                     leave-to-class="opacity-0 scale-95 translate-y-4"
                 >
-                    <div v-if="open" class="relative bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 text-center">
+                    <div v-if="open" class="relative bg-white rounded-lg shadow-2xl max-w-md w-full p-6 text-center">
                         <!-- Close button -->
                         <button
                             @click="emit('close')"
@@ -134,27 +249,22 @@ onBeforeUnmount(() => { stopScanner() })
 
                         <!-- Show QR Tab -->
                         <template v-if="activeTab === 'show'">
-                            <!-- Loading -->
-                            <div v-if="loading" class="w-full aspect-square mx-auto bg-gray-100 rounded-xl animate-pulse" />
+                            <div v-if="loading" class="w-full aspect-square mx-auto bg-gray-100 rounded-lg animate-pulse" />
 
-                            <!-- QR Code -->
                             <div v-else-if="qrDataUrl" class="flex justify-center mb-4">
-                                <img :src="qrDataUrl" alt="QR Code" class="w-full aspect-square rounded-xl" />
+                                <img :src="qrDataUrl" alt="QR Code" class="w-full aspect-square rounded-lg" />
                             </div>
 
-                            <!-- No token -->
-                            <div v-else class="w-full aspect-square mx-auto bg-gray-50 rounded-xl flex items-center justify-center mb-4">
+                            <div v-else class="w-full aspect-square mx-auto bg-gray-50 rounded-lg flex items-center justify-center mb-4">
                                 <p class="text-sm text-gray-400 px-4">No QR token assigned yet.<br />Contact your admin.</p>
                             </div>
 
-                            <!-- Member info -->
                             <p class="text-base font-heading font-semibold text-navy">
                                 {{ auth.user?.first_name }} {{ auth.user?.last_name }}
                             </p>
                             <p class="text-xs text-gray-500 mt-0.5">
                                 {{ auth.profile?.satellite_church_name ?? 'RCMI' }}
                             </p>
-
                             <p class="text-[11px] text-gray-300 mt-4">
                                 Present this QR code for attendance scanning
                             </p>
@@ -162,25 +272,79 @@ onBeforeUnmount(() => { stopScanner() })
 
                         <!-- Scan QR Tab -->
                         <template v-else>
-                            <!-- Scanner area -->
-                            <div v-if="!scanResult" class="space-y-4">
-                                <div id="qr-reader" class="w-full aspect-square mx-auto rounded-xl overflow-hidden bg-gray-900" />
+                            <div v-if="!scanResult" class="space-y-4 text-left">
+                                <!-- Log Type Toggle -->
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-700 mb-1">Log For</label>
+                                    <div class="inline-flex gap-0.5 bg-gray-100/80 rounded-md p-0.5">
+                                        <button
+                                            type="button"
+                                            class="px-3 py-1.5 text-xs font-medium rounded transition-all"
+                                            :class="scanLogType === 'event' ? 'bg-white text-navy shadow-sm' : 'text-gray-400 hover:text-gray-600'"
+                                            @click="scanLogType = 'event'"
+                                        >
+                                            Event
+                                        </button>
+                                        <button
+                                            type="button"
+                                            class="px-3 py-1.5 text-xs font-medium rounded transition-all"
+                                            :class="scanLogType === 'program' ? 'bg-white text-navy shadow-sm' : 'text-gray-400 hover:text-gray-600'"
+                                            @click="scanLogType = 'program'"
+                                        >
+                                            Program
+                                        </button>
+                                    </div>
+                                </div>
 
-                                <button
-                                    v-if="!scanning"
-                                    @click="startScanner"
-                                    class="inline-flex items-center gap-2 px-4 py-2 bg-navy text-white text-sm font-semibold rounded-xl hover:bg-navy-700 transition-colors"
-                                >
-                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
-                                    </svg>
-                                    Start Camera
-                                </button>
+                                <!-- Event Select -->
+                                <div v-if="scanLogType === 'event'">
+                                    <label class="block text-xs font-medium text-gray-700 mb-1">Event</label>
+                                    <select
+                                        v-model="scanEventId"
+                                        class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-navy/30"
+                                    >
+                                        <option :value="null" disabled>Select event</option>
+                                        <option v-for="opt in allEventOptions" :key="opt.id" :value="opt.id">
+                                            {{ opt.label }}
+                                        </option>
+                                    </select>
+                                </div>
 
-                                <p v-if="scanning" class="text-xs text-gray-400">Point camera at a QR code...</p>
+                                <!-- Program Select -->
+                                <div v-else>
+                                    <label class="block text-xs font-medium text-gray-700 mb-1">Program</label>
+                                    <select
+                                        v-model="scanProgramId"
+                                        class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-navy/30"
+                                    >
+                                        <option :value="null" disabled>Select program</option>
+                                        <option v-for="p in programs" :key="p.id" :value="p.id">
+                                            {{ p.type }}
+                                        </option>
+                                    </select>
+                                </div>
 
-                                <p v-if="scanError && !scanResult" class="text-xs text-red-500">{{ scanError }}</p>
+                                <!-- Scanner -->
+                                <div id="qr-reader" class="w-full aspect-square mx-auto rounded-lg overflow-hidden bg-gray-900" />
+
+                                <div class="text-center">
+                                    <button
+                                        v-if="!scanning"
+                                        :disabled="!canStartScan"
+                                        @click="startScanner"
+                                        class="inline-flex items-center gap-2 px-4 py-2 bg-navy text-white text-sm font-semibold rounded-lg hover:bg-navy-700 disabled:opacity-50 transition-colors"
+                                    >
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
+                                        </svg>
+                                        Start Camera
+                                    </button>
+
+                                    <p v-if="scanning" class="text-xs text-gray-400">Point camera at a QR code...</p>
+                                </div>
+
+                                <p v-if="scanError && !scanResult" class="text-xs text-red-500 text-center">{{ scanError }}</p>
                             </div>
 
                             <!-- Scan result -->
@@ -193,10 +357,11 @@ onBeforeUnmount(() => { stopScanner() })
                                         </svg>
                                     </div>
                                     <p class="text-base font-heading font-semibold text-navy">{{ scanSuccess.name }}</p>
-                                    <p class="text-xs text-green-600 font-medium">Member found</p>
+                                    <p class="text-xs text-gray-500">{{ scanSuccess.title }}</p>
+                                    <p class="text-xs text-green-600 font-medium">Checked in successfully</p>
                                 </div>
 
-                                <!-- Not found -->
+                                <!-- Not found / error -->
                                 <div v-else-if="scanError" class="space-y-3">
                                     <div class="w-16 h-16 mx-auto rounded-full bg-red-100 flex items-center justify-center">
                                         <svg class="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -207,8 +372,8 @@ onBeforeUnmount(() => { stopScanner() })
                                 </div>
 
                                 <button
-                                    @click="scanResult = null; scanError = null; scanSuccess = null"
-                                    class="inline-flex items-center gap-2 px-4 py-2 bg-navy text-white text-sm font-semibold rounded-xl hover:bg-navy-700 transition-colors"
+                                    @click="resetScan()"
+                                    class="inline-flex items-center gap-2 px-4 py-2 bg-navy text-white text-sm font-semibold rounded-lg hover:bg-navy-700 transition-colors"
                                 >
                                     Scan Again
                                 </button>
@@ -222,7 +387,6 @@ onBeforeUnmount(() => { stopScanner() })
 </template>
 
 <style scoped>
-/* Force html5-qrcode video to fill container */
 :deep(#qr-reader video) {
     width: 100% !important;
     height: 100% !important;

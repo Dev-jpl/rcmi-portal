@@ -195,15 +195,15 @@ function getRsvpCount(eventId: number) {
         <div class="relative overflow-hidden rounded-lg mb-8">
             <div class="absolute inset-0 bg-gradient-to-br from-navy via-navy-700 to-navy-600" />
             <div class="absolute inset-0 opacity-[0.04]" style="background-image: radial-gradient(circle at 20% 50%, white 1px, transparent 1px); background-size: 24px 24px;" />
-            <div class="relative px-6 py-8 sm:px-8 sm:py-10 flex items-center justify-between gap-4">
+            <div class="relative px-5 py-6 sm:px-8 sm:py-10 flex items-center justify-between gap-4">
                 <div>
-                    <p class="text-navy-200 text-sm font-medium mb-1">
+                    <p class="text-navy-200 text-[11px] sm:text-sm font-medium mb-0.5 sm:mb-1">
                         {{ new Date().toLocaleDateString('en', { weekday: 'long', month: 'long', day: 'numeric' }) }}
                     </p>
-                    <h1 class="text-2xl sm:text-3xl font-heading font-bold text-white mb-2">
+                    <h1 class="text-lg sm:text-3xl font-heading font-bold text-white mb-1 sm:mb-2">
                         {{ greeting }}, {{ auth.user?.first_name }}
                     </h1>
-                    <p class="text-white/60 text-sm">
+                    <p class="text-white/60 text-xs sm:text-sm">
                         {{ auth.profile?.satellite_church_name ?? 'RCMI' }} Member
                     </p>
                 </div>
@@ -235,24 +235,52 @@ function getRsvpCount(eventId: number) {
 
         <template v-else>
             <!-- Stat Cards -->
-            <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                <div class="bg-white rounded-lg p-4 border border-gray-200 hover:border-gray-300 transition-colors">
-                    <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Services Attended</p>
-                    <p class="text-2xl font-heading font-bold text-navy">{{ totalAttendance }}</p>
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+                <div class="bg-white rounded-lg p-3 sm:p-4 border border-gray-200 hover:border-gray-300 transition-colors flex items-center justify-between gap-2">
+                    <div class="min-w-0">
+                        <p class="text-[10px] text-gray-500 uppercase tracking-wider leading-tight">Attended</p>
+                        <p class="text-xl font-heading font-bold text-navy">{{ totalAttendance }}</p>
+                    </div>
+                    <div class="w-9 h-9 rounded-lg bg-navy/6 flex items-center justify-center shrink-0">
+                        <svg class="w-4.5 h-4.5 text-navy" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                    </div>
                 </div>
-                <div class="bg-white rounded-lg p-4 border border-gray-200 hover:border-gray-300 transition-colors">
-                    <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">This Month</p>
-                    <p class="text-2xl font-heading font-bold text-navy">
-                        {{ chartData.datasets[0].data[chartData.datasets[0].data.length - 1] }}
-                    </p>
+                <div class="bg-white rounded-lg p-3 sm:p-4 border border-gray-200 hover:border-gray-300 transition-colors flex items-center justify-between gap-2">
+                    <div class="min-w-0">
+                        <p class="text-[10px] text-gray-500 uppercase tracking-wider leading-tight">This Month</p>
+                        <p class="text-xl font-heading font-bold text-navy">
+                            {{ chartData.datasets[0].data[chartData.datasets[0].data.length - 1] }}
+                        </p>
+                    </div>
+                    <div class="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
+                        <svg class="w-4.5 h-4.5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
+                        </svg>
+                    </div>
                 </div>
-                <div class="bg-white rounded-lg p-4 border border-gray-200 hover:border-gray-300 transition-colors">
-                    <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Enrolled Programs</p>
-                    <p class="text-2xl font-heading font-bold text-navy">{{ enrolledPrograms }}</p>
+                <div class="bg-white rounded-lg p-3 sm:p-4 border border-gray-200 hover:border-gray-300 transition-colors flex items-center justify-between gap-2">
+                    <div class="min-w-0">
+                        <p class="text-[10px] text-gray-500 uppercase tracking-wider leading-tight">Enrolled</p>
+                        <p class="text-xl font-heading font-bold text-navy">{{ enrolledPrograms }}</p>
+                    </div>
+                    <div class="w-9 h-9 rounded-lg bg-emerald-50 flex items-center justify-center shrink-0">
+                        <svg class="w-4.5 h-4.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4.26 10.147a60.436 60.436 0 00-.491 6.347A48.627 48.627 0 0112 20.904a48.627 48.627 0 018.232-4.41 60.46 60.46 0 00-.491-6.347m-15.482 0a50.57 50.57 0 00-2.658-.813A59.905 59.905 0 0112 3.493a59.902 59.902 0 0110.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.697 50.697 0 0112 13.489a50.702 50.702 0 017.74-3.342" />
+                        </svg>
+                    </div>
                 </div>
-                <div class="bg-white rounded-lg p-4 border border-gray-200 hover:border-gray-300 transition-colors">
-                    <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Completed</p>
-                    <p class="text-2xl font-heading font-bold text-gold-600">{{ completedPrograms }}</p>
+                <div class="bg-white rounded-lg p-3 sm:p-4 border border-gray-200 hover:border-gray-300 transition-colors flex items-center justify-between gap-2">
+                    <div class="min-w-0">
+                        <p class="text-[10px] text-gray-500 uppercase tracking-wider leading-tight">Completed</p>
+                        <p class="text-xl font-heading font-bold text-gold-600">{{ completedPrograms }}</p>
+                    </div>
+                    <div class="w-9 h-9 rounded-lg bg-gold/10 flex items-center justify-center shrink-0">
+                        <svg class="w-4.5 h-4.5 text-gold-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M11.48 3.499a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.563.563 0 00-.586 0L6.982 20.54a.562.562 0 01-.84-.61l1.285-5.386a.562.562 0 00-.182-.557l-4.204-3.602a.563.563 0 01.321-.988l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z" />
+                        </svg>
+                    </div>
                 </div>
             </div>
 
@@ -336,32 +364,28 @@ function getRsvpCount(eventId: number) {
                                 :to="{ name: 'member-event-detail', params: { id: evt.id } }"
                                 class="block group/event rounded-lg bg-gray-50/80 hover:bg-gray-50 border border-transparent hover:border-gray-100 transition-all duration-200 overflow-hidden"
                             >
-                                <!-- Cover Photo -->
-                                <div v-if="(evt as any).cover_photo_url" class="h-32 bg-gray-100">
-                                    <img :src="(evt as any).cover_photo_url" :alt="evt.event_title" class="w-full h-full object-cover" />
-                                </div>
-
-                                <div class="p-4">
-                                    <div class="flex items-start gap-4">
-                                        <div class="w-12 h-12 rounded-lg bg-navy/[0.08] flex flex-col items-center justify-center text-navy shrink-0">
-                                            <span class="text-[10px] uppercase font-semibold leading-none text-navy/60">
-                                                {{ new Date(evt.duration_from!).toLocaleDateString('en', { month: 'short' }) }}
-                                            </span>
-                                            <span class="text-lg font-heading font-bold leading-tight">
-                                                {{ new Date(evt.duration_from!).getDate() }}
-                                            </span>
+                                <div class="flex flex-col sm:flex-row">
+                                    <div class="flex-1 p-4">
+                                        <div class="flex items-start gap-4">
+                                            <div class="w-12 h-12 rounded-lg bg-navy/[0.08] flex flex-col items-center justify-center text-navy shrink-0">
+                                                <span class="text-[10px] uppercase font-semibold leading-none text-navy/60">
+                                                    {{ new Date(evt.duration_from!).toLocaleDateString('en', { month: 'short' }) }}
+                                                </span>
+                                                <span class="text-lg font-heading font-bold leading-tight">
+                                                    {{ new Date(evt.duration_from!).getDate() }}
+                                                </span>
+                                            </div>
+                                            <div class="min-w-0 flex-1">
+                                                <p class="text-sm font-semibold text-gray-900 truncate">{{ evt.event_title }}</p>
+                                                <p class="text-xs text-gray-500 mt-0.5">
+                                                    {{ formatEventTime(evt.duration_from) }}
+                                                    <span v-if="evt.event_type" class="text-gray-300 mx-1">&middot;</span>
+                                                    <span v-if="evt.event_type" class="text-gray-400">{{ evt.event_type }}</span>
+                                                </p>
+                                            </div>
                                         </div>
-                                        <div class="min-w-0 flex-1">
-                                            <p class="text-sm font-semibold text-gray-900 truncate">{{ evt.event_title }}</p>
-                                            <p class="text-xs text-gray-500 mt-0.5">
-                                                {{ formatEventTime(evt.duration_from) }}
-                                                <span v-if="evt.event_type" class="text-gray-300 mx-1">&middot;</span>
-                                                <span v-if="evt.event_type" class="text-gray-400">{{ evt.event_type }}</span>
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <!-- RSVP buttons -->
-                                    <div class="flex items-center gap-2 mt-3 ml-16" @click.prevent>
+                                        <!-- RSVP buttons -->
+                                        <div class="flex items-center gap-2 mt-3 ml-16" @click.prevent>
                                         <button
                                             class="text-xs px-3 py-1.5 rounded-lg font-medium transition-all duration-200"
                                             :class="getRsvpStatus(evt.id) === 'going' ? 'bg-green-100 text-green-700 shadow-sm' : 'bg-white text-gray-500 hover:bg-green-50 hover:text-green-600 border border-gray-200 hover:border-green-200'"
@@ -383,6 +407,11 @@ function getRsvpCount(eventId: number) {
                                         >
                                             Can't Go
                                         </button>
+                                    </div>
+                                    </div>
+                                    <!-- Cover Photo (right side on desktop) -->
+                                    <div v-if="(evt as any).cover_photo_url" class="hidden sm:block w-40 shrink-0">
+                                        <img :src="(evt as any).cover_photo_url" :alt="evt.event_title" class="w-full h-full object-cover" />
                                     </div>
                                 </div>
                             </router-link>
@@ -513,14 +542,24 @@ function getRsvpCount(eventId: number) {
                     <!-- Network Profile -->
                     <div class="bg-white rounded-lg border border-gray-200 p-5 sm:p-6">
                         <div class="flex items-center justify-between mb-4">
-                            <h2 class="font-heading font-semibold text-navy text-lg">My Network</h2>
-                            <div class="w-9 h-9 rounded-lg bg-navy/[0.06] flex items-center justify-center">
+                            <div>
+                                <h2 class="font-heading font-semibold text-navy text-lg">My Network</h2>
+                                <p v-if="member.network.myRole" class="text-xs text-gray-500 mt-0.5">
+                                    My Role: <span class="font-semibold text-navy">{{ member.network.myRole }}</span>
+                                </p>
+                            </div>
+                            <div class="w-9 h-9 rounded-lg bg-navy/6 flex items-center justify-center">
                                 <svg class="w-4.5 h-4.5 text-navy" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
                                 </svg>
                             </div>
                         </div>
-                        <div class="space-y-4">
+                        <!-- Pastor role: no hierarchy above -->
+                        <p v-if="member.network.myRole === 'Pastor'" class="text-sm text-gray-500">
+                            You are a Pastor — no leadership hierarchy above you.
+                        </p>
+                        <div v-else class="space-y-4">
+                            <!-- Pastor (shown for NL, LL, Member) -->
                             <div class="flex items-center gap-3.5">
                                 <div class="w-9 h-9 rounded-lg bg-violet-50 flex items-center justify-center shrink-0">
                                     <svg class="w-4 h-4 text-violet-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -534,7 +573,8 @@ function getRsvpCount(eventId: number) {
                                     </p>
                                 </div>
                             </div>
-                            <div class="flex items-center gap-3.5">
+                            <!-- Network Leader (shown for LL, Member — not for NL since that's their own role) -->
+                            <div v-if="member.network.myRole !== 'Network Leader'" class="flex items-center gap-3.5">
                                 <div class="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
                                     <svg class="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
@@ -547,7 +587,8 @@ function getRsvpCount(eventId: number) {
                                     </p>
                                 </div>
                             </div>
-                            <div class="flex items-center gap-3.5">
+                            <!-- L-Path Leader (shown only for Member — not for NL or LL) -->
+                            <div v-if="member.network.myRole === 'Member'" class="flex items-center gap-3.5">
                                 <div class="w-9 h-9 rounded-lg bg-teal-50 flex items-center justify-center shrink-0">
                                     <svg class="w-4 h-4 text-teal-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
