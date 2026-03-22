@@ -258,7 +258,7 @@ function churchName(churchId: number | null) {
         <div v-else-if="!filtered.length" class="text-center py-12 text-gray-400">No network leaders found.</div>
 
         <!-- Table -->
-        <div v-else class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div v-else class="bg-white rounded-lg border border-gray-200 overflow-hidden">
             <div class="overflow-x-auto">
                 <table class="w-full text-sm">
                     <thead>
@@ -317,7 +317,7 @@ function churchName(churchId: number | null) {
                 class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
                 @click.self="showModal = false"
             >
-                <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+                <div class="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
                     <h3 class="text-lg font-heading font-bold text-navy mb-4">
                         {{ editingId ? 'Edit' : 'Add' }} Network Leader
                     </h3>

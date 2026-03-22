@@ -31,8 +31,48 @@ const { scannedToken, scanning, error: scanError, start: startScanner, stop: sto
 const qrEventId = ref<number | null>(null)
 const qrProcessing = ref(false)
 
+// Default events from library
+const defaultEvents = ref<{ id: number; event_title: string }[]>([])
+
+async function fetchDefaultEvents() {
+    const { data } = await supabase
+        .from('lib_default_events')
+        .select('id, event_title')
+        .eq('is_active', true)
+        .order('event_title')
+    defaultEvents.value = data ?? []
+}
+
+// Merged list: real events + default events (with negative IDs to distinguish)
+const allEventOptions = computed(() => {
+    const real = eventStore.events
+        .filter(e => e.is_active)
+        .map(e => ({ id: e.id, label: e.event_title, isDefault: false }))
+    const defaults = defaultEvents.value
+        .map(d => ({ id: -d.id, label: `${d.event_title} (Default)`, isDefault: true }))
+    return [...real, ...defaults]
+})
+
+function getEventLabel(id: number | null) {
+    if (!id) return null
+    const opt = allEventOptions.value.find(o => o.id === id)
+    return opt?.label ?? null
+}
+
+// Resolve the real event title for logging (strip " (Default)" suffix)
+function getEventTitleForLog(id: number | null) {
+    if (!id) return null
+    if (id > 0) {
+        const evt = eventStore.events.find(e => e.id === id)
+        return evt?.event_title ?? null
+    }
+    // Default event (negative id)
+    const de = defaultEvents.value.find(d => d.id === -id!)
+    return de?.event_title ?? null
+}
+
 onMounted(async () => {
-    await Promise.all([fetchLogs(), admin.fetchMembers(), eventStore.fetchEvents()])
+    await Promise.all([fetchLogs(), admin.fetchMembers(), eventStore.fetchEvents(), fetchDefaultEvents()])
     loading.value = false
 })
 
@@ -65,7 +105,8 @@ const filtered = computed(() => {
             (l) =>
                 l.event_title?.toLowerCase().includes(q) ||
                 l.logged_by_name?.toLowerCase().includes(q) ||
-                l.logged_location_name?.toLowerCase().includes(q),
+                l.logged_location_name?.toLowerCase().includes(q) ||
+                getMemberName(l.user_id).toLowerCase().includes(q),
         )
     }
     return list
@@ -76,14 +117,16 @@ async function handleManualCheckIn() {
     manualSaving.value = true
     message.value = null
 
-    const event = eventStore.events.find((e) => e.id === manualForm.value.event_id)
-    const member = admin.members.find((m) => m.user_id === manualForm.value.user_id)
+    const eventTitle = getEventTitleForLog(manualForm.value.event_id)
+    const member = admin.members.find((m: any) => m.user_id === manualForm.value.user_id)
     const userName = `${auth.user?.first_name ?? ''} ${auth.user?.last_name ?? ''}`.trim()
+    // For default events (negative id), don't store the id — only the title
+    const realEventId = manualForm.value.event_id! > 0 ? manualForm.value.event_id : null
 
     const { error } = await supabase.from('tbl_attendance_logs').insert({
         user_id: manualForm.value.user_id,
-        event_id: manualForm.value.event_id,
-        event_title: event?.event_title ?? null,
+        event_id: realEventId,
+        event_title: eventTitle,
         input_method: 'manual',
         log_date: new Date().toISOString().split('T')[0],
         logged_at: new Date().toISOString(),
@@ -123,13 +166,14 @@ async function handleQRScan() {
         return
     }
 
-    const event = eventStore.events.find((e) => e.id === qrEventId.value)
+    const eventTitle = getEventTitleForLog(qrEventId.value)
     const userName = `${auth.user?.first_name ?? ''} ${auth.user?.last_name ?? ''}`.trim()
+    const realEventId = qrEventId.value! > 0 ? qrEventId.value : null
 
     const { error } = await supabase.from('tbl_attendance_logs').insert({
         user_id: profile.user_id,
-        event_id: qrEventId.value!,
-        event_title: event?.event_title ?? null,
+        event_id: realEventId,
+        event_title: eventTitle,
         input_method: 'QR',
         log_date: new Date().toISOString().split('T')[0],
         logged_at: new Date().toISOString(),
@@ -165,6 +209,12 @@ async function onTabChange(tab: typeof activeTab.value) {
     }
 }
 
+function getMemberName(userId: string | null) {
+    if (!userId) return '—'
+    const m = admin.members.find(m => m.user_id === userId)
+    return m ? `${m.first_name} ${m.last_name}` : '—'
+}
+
 function formatDate(d: string | null) {
     if (!d) return '—'
     return new Date(d).toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric' })
@@ -181,7 +231,7 @@ function formatTime(d: string | null) {
         <h1 class="text-2xl font-heading font-bold text-navy mb-6">Attendance Management</h1>
 
         <!-- Tabs -->
-        <div class="flex gap-1 mb-6 bg-gray-100 rounded-lg p-1 w-fit flex-wrap">
+        <div class="inline-flex gap-0.5 bg-gray-100/80 rounded-md p-0.5 mb-6 flex-wrap">
             <button
                 v-for="tab in [
                     { key: 'event' as const, label: 'By Event' },
@@ -190,8 +240,8 @@ function formatTime(d: string | null) {
                     { key: 'qr' as const, label: 'QR Scanner' },
                 ]"
                 :key="tab.key"
-                class="px-4 py-2 text-sm font-medium rounded-md transition-colors"
-                :class="activeTab === tab.key ? 'bg-white text-navy shadow-sm' : 'text-gray-500 hover:text-gray-700'"
+                class="px-2.5 py-1 text-[11px] font-medium rounded transition-all whitespace-nowrap"
+                :class="activeTab === tab.key ? 'bg-white text-navy shadow-sm' : 'text-gray-400 hover:text-gray-600'"
                 @click="onTabChange(tab.key)"
             >
                 {{ tab.label }}
@@ -208,7 +258,7 @@ function formatTime(d: string | null) {
         </p>
 
         <!-- Manual Check-In Tab -->
-        <div v-if="activeTab === 'manual'" class="bg-white rounded-xl border border-gray-200 p-6 max-w-lg">
+        <div v-if="activeTab === 'manual'" class="bg-white rounded-lg border border-gray-200 p-6 max-w-lg">
             <h2 class="font-heading font-semibold text-navy mb-4">Manual Check-In</h2>
             <form @submit.prevent="handleManualCheckIn" class="space-y-4">
                 <div>
@@ -236,8 +286,8 @@ function formatTime(d: string | null) {
                         class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-navy/30"
                     >
                         <option :value="null" disabled>Select event</option>
-                        <option v-for="e in eventStore.events.filter(e => e.is_active)" :key="e.id" :value="e.id">
-                            {{ e.event_title }}
+                        <option v-for="opt in allEventOptions" :key="opt.id" :value="opt.id">
+                            {{ opt.label }}
                         </option>
                     </select>
                 </div>
@@ -253,7 +303,7 @@ function formatTime(d: string | null) {
 
         <!-- QR Scanner Tab -->
         <div v-else-if="activeTab === 'qr'" class="max-w-lg">
-            <div class="bg-white rounded-xl border border-gray-200 p-6">
+            <div class="bg-white rounded-lg border border-gray-200 p-6">
                 <h2 class="font-heading font-semibold text-navy mb-4">QR Code Scanner</h2>
 
                 <div class="mb-4">
@@ -264,8 +314,8 @@ function formatTime(d: string | null) {
                         class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-navy/30"
                     >
                         <option :value="null" disabled>Select event first</option>
-                        <option v-for="e in eventStore.events.filter(e => e.is_active)" :key="e.id" :value="e.id">
-                            {{ e.event_title }}
+                        <option v-for="opt in allEventOptions" :key="opt.id" :value="opt.id">
+                            {{ opt.label }}
                         </option>
                     </select>
                 </div>
@@ -312,12 +362,13 @@ function formatTime(d: string | null) {
 
             <div v-else-if="!filtered.length" class="text-center py-12 text-gray-400">No attendance records.</div>
 
-            <div v-else class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <div v-else class="bg-white rounded-lg border border-gray-200 overflow-hidden">
                 <div class="overflow-x-auto">
                     <table class="w-full text-sm">
                         <thead>
                             <tr class="bg-gray-50 text-left text-gray-500 font-medium">
                                 <th class="px-4 py-3">Date</th>
+                                <th class="px-4 py-3">Member</th>
                                 <th class="px-4 py-3">Event</th>
                                 <th class="px-4 py-3 hidden md:table-cell">Logged By</th>
                                 <th class="px-4 py-3 hidden md:table-cell">Location</th>
@@ -328,6 +379,7 @@ function formatTime(d: string | null) {
                         <tbody class="divide-y divide-gray-100">
                             <tr v-for="log in filtered" :key="log.id" class="hover:bg-gray-50/50">
                                 <td class="px-4 py-3 text-gray-900">{{ formatDate(log.log_date) }}</td>
+                                <td class="px-4 py-3 font-medium text-gray-900">{{ getMemberName(log.user_id) }}</td>
                                 <td class="px-4 py-3 font-medium text-gray-900">{{ log.event_title ?? '—' }}</td>
                                 <td class="px-4 py-3 text-gray-500 hidden md:table-cell">{{ log.logged_by_name ?? '—' }}</td>
                                 <td class="px-4 py-3 text-gray-500 hidden md:table-cell">{{ log.logged_location_name ?? '—' }}</td>

@@ -226,7 +226,7 @@ function churchName(id: number | null) {
         <div v-if="loading" class="space-y-3"><div v-for="i in 4" :key="i" class="h-14 bg-gray-200 rounded-lg animate-pulse" /></div>
         <div v-else-if="!filtered.length" class="text-center py-12 text-gray-400">No L-Path members found.</div>
 
-        <div v-else class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div v-else class="bg-white rounded-lg border border-gray-200 overflow-hidden">
             <div class="overflow-x-auto">
                 <table class="w-full text-sm">
                     <thead>
@@ -274,7 +274,7 @@ function churchName(id: number | null) {
         <!-- Modal -->
         <Teleport to="body">
             <div v-if="showModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" @click.self="showModal = false">
-                <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+                <div class="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
                     <h3 class="text-lg font-heading font-bold text-navy mb-4">{{ editingId ? 'Edit' : 'Add' }} L-Path Member</h3>
                     <div class="space-y-4">
                         <div>

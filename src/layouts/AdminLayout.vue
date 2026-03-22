@@ -10,7 +10,55 @@ const router = useRouter()
 const sidebarOpen = ref(false)
 const showUserMenu = ref(false)
 const showQr = ref(false)
+const viewDropdownOpen = ref(false)
 
+// View switcher
+type ViewMode = 'member' | 'admin' | 'ministry'
+const currentView = ref<ViewMode>('admin')
+
+const viewIcons: Record<ViewMode, string> = {
+    member: `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z"/>`,
+    admin: `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 010 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 010-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>`,
+    ministry: `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z"/>`,
+}
+
+const viewLabels: Record<ViewMode, string> = {
+    member: 'Member',
+    admin: 'Admin',
+    ministry: 'Ministry',
+}
+
+const viewOptions = computed(() => {
+    const options: ViewMode[] = ['member']
+    if (auth.isAdmin) options.push('admin')
+    if (auth.hasLeadershipRole) options.push('ministry')
+    return options
+})
+
+// Determine initial view based on current route
+const route = router.currentRoute
+if (route.value.name?.toString().startsWith('admin-my-') || route.value.name === 'admin-my-team' || route.value.name === 'admin-my-network' || route.value.name === 'admin-my-lpath') {
+    currentView.value = 'ministry'
+} else {
+    currentView.value = 'admin'
+}
+
+function selectView(v: ViewMode) {
+    viewDropdownOpen.value = false
+    if (v === currentView.value) return
+    if (v === 'member') {
+        router.push({ name: 'member-dashboard' })
+        return
+    }
+    currentView.value = v
+    if (v === 'admin') {
+        router.push({ name: 'admin-dashboard' })
+    } else if (v === 'ministry') {
+        if (auth.isPastor) router.push({ name: 'admin-my-team' })
+        else if (auth.isNetworkLeader) router.push({ name: 'admin-my-network' })
+        else if (auth.isLpathLeader) router.push({ name: 'admin-my-lpath' })
+    }
+}
 
 const icons = {
     dashboard: `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zm0 9.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zm9.75-9.75A2.25 2.25 0 0115.75 3.75H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zm0 9.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25a2.25 2.25 0 01-2.25-2.25v-2.25z"/>`,
@@ -26,6 +74,7 @@ const icons = {
     network: `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z"/>`,
     lpath: `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21"/>`,
     myteam: `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z"/>`,
+    qrscan: `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 013.75 9.375v-4.5zM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5zM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5z"/>`,
 }
 
 interface NavItem {
@@ -43,8 +92,7 @@ interface NavGroup {
 const navGroups = computed<NavGroup[]>(() => {
     const groups: NavGroup[] = []
 
-    // Admin-only sections
-    if (auth.isAdmin) {
+    if (currentView.value === 'admin' && auth.isAdmin) {
         groups.push({
             title: 'Overview',
             items: [
@@ -59,17 +107,16 @@ const navGroups = computed<NavGroup[]>(() => {
                 { label: 'Attendance', to: { name: 'admin-attendance' }, iconKey: 'attendance' },
             ],
         })
-
-        // Leadership CRUD (admin only)
-        const leadershipItems: NavItem[] = [
-            { label: 'BOD Members', to: { name: 'admin-bod-members' }, iconKey: 'bod' },
-            { label: 'Pastors', to: { name: 'admin-pastoral-members' }, iconKey: 'pastoral' },
-            { label: 'Network Leaders', to: { name: 'admin-network-leaders' }, iconKey: 'network' },
-            { label: 'L-Path Leaders', to: { name: 'admin-lpath-leaders' }, iconKey: 'lpath' },
-            { label: 'L-Path Members', to: { name: 'admin-lpath-members' }, iconKey: 'members' },
-        ]
-        groups.push({ title: 'Leadership', items: leadershipItems })
-
+        groups.push({
+            title: 'Leadership',
+            items: [
+                { label: 'BOD Members', to: { name: 'admin-bod-members' }, iconKey: 'bod' },
+                { label: 'Pastors', to: { name: 'admin-pastoral-members' }, iconKey: 'pastoral' },
+                { label: 'Network Leaders', to: { name: 'admin-network-leaders' }, iconKey: 'network' },
+                { label: 'L-Path Leaders', to: { name: 'admin-lpath-leaders' }, iconKey: 'lpath' },
+                { label: 'L-Path Members', to: { name: 'admin-lpath-members' }, iconKey: 'members' },
+            ],
+        })
         groups.push({
             title: 'Content',
             items: [
@@ -84,33 +131,43 @@ const navGroups = computed<NavGroup[]>(() => {
                 { label: 'Audit Log', to: { name: 'admin-audit-log' }, iconKey: 'audit' },
             ],
         })
-    }
-
-    // Scoped management sections (based on active assignments)
-    const scopedItems: NavItem[] = []
-    if (auth.isPastor) {
-        scopedItems.push({ label: 'Network Management', to: { name: 'admin-my-team' }, iconKey: 'myteam' })
-    }
-    if (auth.isNetworkLeader) {
-        scopedItems.push({ label: 'My Network', to: { name: 'admin-my-network' }, iconKey: 'network' })
-    }
-    if (auth.isLpathLeader) {
-        scopedItems.push({ label: 'My L-Path', to: { name: 'admin-my-lpath' }, iconKey: 'lpath' })
-    }
-    if (scopedItems.length) {
-        groups.push({ title: 'My Management', items: scopedItems })
+    } else if (currentView.value === 'ministry') {
+        // Ministry view — only leadership-assigned items
+        const items: NavItem[] = []
+        if (auth.isPastor) {
+            items.push({ label: 'My Team', to: { name: 'admin-my-team' }, iconKey: 'myteam' })
+        }
+        if (auth.isNetworkLeader) {
+            items.push({ label: 'My Network', to: { name: 'admin-my-network' }, iconKey: 'network' })
+        }
+        if (auth.isLpathLeader) {
+            items.push({ label: 'My L-Path', to: { name: 'admin-my-lpath' }, iconKey: 'lpath' })
+        }
+        if (items.length) {
+            groups.push({ title: 'My Ministry', items })
+        }
+        groups.push({
+            title: 'Tools',
+            items: [
+                { label: 'QR Scan', to: { name: 'admin-qr-scan' }, iconKey: 'qrscan' },
+            ],
+        })
     }
 
     return groups
 })
 
+const sidebarTitle = computed(() => {
+    return currentView.value === 'admin' ? 'RCMI Admin' : 'RCMI Ministry'
+})
+
+const sidebarSubtitle = computed(() => {
+    return currentView.value === 'admin' ? 'Management' : 'Leadership'
+})
+
 async function handleLogout() {
     await auth.logout()
     router.push({ name: 'login' })
-}
-
-function switchToMember() {
-    router.push({ name: 'member-dashboard' })
 }
 </script>
 
@@ -122,22 +179,63 @@ function switchToMember() {
 
         <!-- Sidebar -->
         <aside
-            class="fixed inset-y-0 left-0 z-40 w-[272px] transform transition-transform duration-300 ease-out lg:translate-x-0 lg:sticky lg:top-0 lg:h-screen flex flex-col text-white"
+            class="fixed inset-y-0 left-0 z-40 w-68 transform transition-transform duration-300 ease-out lg:translate-x-0 lg:sticky lg:top-0 lg:h-screen flex flex-col text-white"
             :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full'"
             style="background: linear-gradient(180deg, #060e2a 0%, #091f55 100%);">
             <!-- Brand -->
-            <div class="flex items-center gap-3.5 px-6 h-16 border-b border-white/[0.08]">
+            <div class="flex items-center gap-3.5 px-6 h-16 border-b border-white/8">
                 <div class="w-9 h-9 rounded-xl bg-gold flex items-center justify-center shadow-lg shadow-gold/20">
                     <span class="text-navy font-heading font-extrabold text-sm tracking-tight">R</span>
                 </div>
                 <div class="leading-tight">
-                    <span class="font-heading font-bold text-[15px] block">RCMI Admin</span>
-                    <span class="text-[10px] text-white/30 font-medium uppercase tracking-[0.1em]">Management</span>
+                    <span class="font-heading font-bold text-[15px] block">{{ sidebarTitle }}</span>
+                    <span class="text-[10px] text-white/30 font-medium uppercase tracking-widest">{{ sidebarSubtitle }}</span>
                 </div>
             </div>
 
+            <!-- View Switcher -->
+            <div class="px-4 pt-4 pb-2 relative">
+                <button
+                    @click="viewDropdownOpen = !viewDropdownOpen"
+                    class="flex items-center gap-3 w-full px-3 py-2.5 bg-white/8 border border-white/10 rounded-xl text-sm text-white/90 font-medium cursor-pointer hover:bg-white/12 focus:outline-none focus:ring-2 focus:ring-gold/30 transition-all"
+                >
+                    <svg class="w-4.5 h-4.5 text-white/50 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" v-html="viewIcons[currentView]" />
+                    <span class="flex-1 text-left">{{ viewLabels[currentView] }}</span>
+                    <svg class="w-3.5 h-3.5 text-white/30 shrink-0 transition-transform duration-200" :class="viewDropdownOpen ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                    </svg>
+                </button>
+                <!-- Dropdown -->
+                <Transition
+                    enter-active-class="transition duration-150 ease-out"
+                    enter-from-class="opacity-0 -translate-y-1 scale-95"
+                    enter-to-class="opacity-100 translate-y-0 scale-100"
+                    leave-active-class="transition duration-100 ease-in"
+                    leave-from-class="opacity-100 translate-y-0 scale-100"
+                    leave-to-class="opacity-0 -translate-y-1 scale-95"
+                >
+                    <div v-if="viewDropdownOpen" class="absolute left-4 right-4 mt-1.5 bg-[#0d1a3a] rounded-xl border border-white/10 shadow-xl shadow-black/30 overflow-hidden z-10">
+                        <button
+                            v-for="opt in viewOptions"
+                            :key="opt"
+                            @click="selectView(opt)"
+                            class="flex items-center gap-3 w-full px-3 py-2.5 text-sm font-medium transition-colors"
+                            :class="opt === currentView ? 'text-gold bg-white/8' : 'text-white/60 hover:text-white hover:bg-white/6'"
+                        >
+                            <svg class="w-4.5 h-4.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" v-html="viewIcons[opt]" />
+                            {{ viewLabels[opt] }}
+                            <svg v-if="opt === currentView" class="w-3.5 h-3.5 ml-auto text-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.5 12.75l6 6 9-13.5" />
+                            </svg>
+                        </button>
+                    </div>
+                </Transition>
+                <!-- Click-outside -->
+                <div v-if="viewDropdownOpen" class="fixed inset-0 z-[5]" @click="viewDropdownOpen = false" />
+            </div>
+
             <!-- Nav -->
-            <nav class="flex-1 overflow-y-auto py-4 px-3">
+            <nav class="flex-1 overflow-y-auto py-2 px-3">
                 <div v-for="(group, gi) in navGroups" :key="group.title" :class="gi > 0 ? 'mt-6' : ''">
                     <p class="px-3 mb-1.5 text-[11px] font-semibold uppercase tracking-widest text-white/30">{{
                         group.title }}</p>
@@ -156,16 +254,6 @@ function switchToMember() {
 
             <!-- User footer (sticky bottom) -->
             <div class="shrink-0 border-t border-white/8 px-3 py-3 relative">
-                <!-- Switch to Member View -->
-                <button @click="switchToMember"
-                    class="flex items-center gap-3 w-full px-4 py-2.5 mb-2 text-sm text-white/60 hover:text-white hover:bg-white/6 rounded-2xl transition-colors">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
-                            d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" />
-                    </svg>
-                    Switch to Member
-                </button>
-
                 <!-- User menu popup -->
                 <Transition enter-active-class="transition duration-150 ease-out"
                     enter-from-class="opacity-0 translate-y-2 scale-95"

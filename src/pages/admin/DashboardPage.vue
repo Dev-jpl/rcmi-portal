@@ -255,9 +255,9 @@ const greeting = computed(() => {
         <!-- Loading -->
         <template v-if="pageLoading">
             <div class="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
-                <div v-for="i in 5" :key="i" class="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm animate-pulse">
-                    <div class="h-4 bg-gray-200 rounded w-24 mb-4" />
-                    <div class="h-8 bg-gray-200 rounded w-14" />
+                <div v-for="i in 5" :key="i" class="bg-white rounded-lg p-4 border border-gray-200 animate-pulse">
+                    <div class="h-3 bg-gray-200 rounded w-20 mb-2" />
+                    <div class="h-6 bg-gray-200 rounded w-12" />
                 </div>
             </div>
         </template>
@@ -266,47 +266,28 @@ const greeting = computed(() => {
             <!-- Stat Cards -->
             <div class="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
                 <!-- Total Members -->
-                <div class="group bg-white rounded-2xl p-5 sm:p-6 border border-gray-100 shadow-sm hover:shadow-md hover:border-navy/10 transition-all duration-300">
-                    <div class="flex items-center justify-between mb-3">
-                        <div class="w-10 h-10 rounded-xl bg-navy/6 flex items-center justify-center">
-                            <svg class="w-5 h-5 text-navy" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
-                            </svg>
-                        </div>
-                    </div>
-                    <p class="text-xs text-gray-400 font-medium uppercase tracking-wider mb-1">Total Members</p>
-                    <p class="text-3xl font-heading font-bold text-navy">{{ totalMembers }}</p>
+                <div class="bg-white rounded-lg p-4 border border-gray-200 hover:border-gray-300 transition-colors">
+                    <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Total Members</p>
+                    <p class="text-2xl font-heading font-bold text-navy">{{ totalMembers }}</p>
                 </div>
 
                 <!-- Active -->
-                <div class="group bg-white rounded-2xl p-5 sm:p-6 border border-gray-100 shadow-sm hover:shadow-md hover:border-emerald-100 transition-all duration-300">
-                    <div class="flex items-center justify-between mb-3">
-                        <div class="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center">
-                            <svg class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                        </div>
-                    </div>
-                    <p class="text-xs text-gray-400 font-medium uppercase tracking-wider mb-1">Active</p>
-                    <p class="text-3xl font-heading font-bold text-emerald-600">{{ activeMembers }}</p>
+                <div class="bg-white rounded-lg p-4 border border-gray-200 hover:border-gray-300 transition-colors">
+                    <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Active</p>
+                    <p class="text-2xl font-heading font-bold text-emerald-600">{{ activeMembers }}</p>
                 </div>
 
                 <!-- Pending -->
-                <div class="group bg-white rounded-2xl p-5 sm:p-6 border border-gray-100 shadow-sm hover:shadow-md hover:border-gold/20 transition-all duration-300">
-                    <div class="flex items-center justify-between mb-3">
-                        <div class="w-10 h-10 rounded-xl bg-gold/10 flex items-center justify-center">
-                            <svg class="w-5 h-5 text-gold-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                        </div>
-                        <span v-if="pendingCount > 0" class="w-2.5 h-2.5 rounded-full bg-gold animate-pulse" />
+                <div class="bg-white rounded-lg p-4 border border-gray-200 hover:border-gray-300 transition-colors">
+                    <div class="flex items-center justify-between">
+                        <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Pending</p>
+                        <span v-if="pendingCount > 0" class="w-2 h-2 rounded-full bg-gold animate-pulse" />
                     </div>
-                    <p class="text-xs text-gray-400 font-medium uppercase tracking-wider mb-1">Pending</p>
-                    <p class="text-3xl font-heading font-bold text-gold-600">{{ pendingCount }}</p>
+                    <p class="text-2xl font-heading font-bold text-gold-600">{{ pendingCount }}</p>
                     <router-link
                         v-if="pendingCount > 0"
                         :to="{ name: 'admin-members' }"
-                        class="inline-flex items-center gap-1 text-xs text-navy/60 hover:text-navy font-medium mt-2 transition-colors"
+                        class="inline-flex items-center gap-1 text-xs text-navy/60 hover:text-navy font-medium mt-1 transition-colors"
                     >
                         Review now
                         <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -316,46 +297,32 @@ const greeting = computed(() => {
                 </div>
 
                 <!-- Inactive -->
-                <div class="group bg-white rounded-2xl p-5 sm:p-6 border border-gray-100 shadow-sm hover:shadow-md hover:border-red-100 transition-all duration-300">
-                    <div class="flex items-center justify-between mb-3">
-                        <div class="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center">
-                            <svg class="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M22 10.5h-6m-2.25-4.125a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zM4 19.235v-.11a6.375 6.375 0 0112.75 0v.109A12.318 12.318 0 0110.374 21c-2.331 0-4.512-.645-6.374-1.766z" />
-                            </svg>
-                        </div>
-                    </div>
-                    <p class="text-xs text-gray-400 font-medium uppercase tracking-wider mb-1">Inactive (30d)</p>
-                    <p class="text-3xl font-heading font-bold text-red-500">{{ inactiveCount }}</p>
+                <div class="bg-white rounded-lg p-4 border border-gray-200 hover:border-gray-300 transition-colors">
+                    <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Inactive (30d)</p>
+                    <p class="text-2xl font-heading font-bold text-red-500">{{ inactiveCount }}</p>
                 </div>
 
                 <!-- Events This Month -->
-                <div class="group bg-white rounded-2xl p-5 sm:p-6 border border-gray-100 shadow-sm hover:shadow-md hover:border-navy/10 transition-all duration-300">
-                    <div class="flex items-center justify-between mb-3">
-                        <div class="w-10 h-10 rounded-xl bg-violet-50 flex items-center justify-center">
-                            <svg class="w-5 h-5 text-violet-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
-                            </svg>
-                        </div>
-                    </div>
-                    <p class="text-xs text-gray-400 font-medium uppercase tracking-wider mb-1">Events This Month</p>
-                    <p class="text-3xl font-heading font-bold text-navy">{{ eventsThisMonth }}</p>
+                <div class="bg-white rounded-lg p-4 border border-gray-200 hover:border-gray-300 transition-colors">
+                    <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Events This Month</p>
+                    <p class="text-2xl font-heading font-bold text-navy">{{ eventsThisMonth }}</p>
                 </div>
             </div>
 
             <!-- Charts row -->
             <div class="grid lg:grid-cols-3 gap-6 mb-6">
                 <!-- Attendance chart with date range filter -->
-                <div class="lg:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm p-5 sm:p-6">
+                <div class="lg:col-span-2 bg-white rounded-lg border border-gray-200 p-5 sm:p-6">
                     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
                         <div>
                             <h2 class="font-heading font-semibold text-navy text-lg">Attendance</h2>
                             <p class="text-xs text-gray-400 mt-0.5">{{ attendanceLogs.length }} total check-ins</p>
                         </div>
-                        <div class="flex items-center bg-gray-50 rounded-xl p-1 border border-gray-100">
+                        <div class="inline-flex gap-0.5 bg-gray-100/80 rounded-md p-0.5">
                             <button
                                 v-for="opt in dateRangeOptions"
                                 :key="opt.value"
-                                class="px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200"
+                                class="px-2.5 py-1 rounded text-[11px] font-medium transition-all"
                                 :class="dateRange === opt.value ? 'bg-white text-navy shadow-sm' : 'text-gray-400 hover:text-gray-600'"
                                 @click="dateRange = opt.value"
                             >
@@ -369,7 +336,7 @@ const greeting = computed(() => {
                 </div>
 
                 <!-- Member status breakdown -->
-                <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 sm:p-6">
+                <div class="bg-white rounded-lg border border-gray-200 p-5 sm:p-6">
                     <h2 class="font-heading font-semibold text-navy text-lg mb-1">Member Status</h2>
                     <p class="text-xs text-gray-400 mb-4">Distribution overview</p>
                     <div class="h-56">
@@ -379,13 +346,13 @@ const greeting = computed(() => {
             </div>
 
             <!-- Church member counts -->
-            <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 sm:p-6">
+            <div class="bg-white rounded-lg border border-gray-200 p-5 sm:p-6">
                 <div class="flex items-center justify-between mb-5">
                     <div>
                         <h2 class="font-heading font-semibold text-navy text-lg">Members by Church</h2>
                         <p class="text-xs text-gray-400 mt-0.5">{{ churches.length }} satellite church{{ churches.length !== 1 ? 'es' : '' }}</p>
                     </div>
-                    <div class="w-10 h-10 rounded-xl bg-navy/6 flex items-center justify-center">
+                    <div class="w-10 h-10 rounded-lg bg-navy/6 flex items-center justify-center">
                         <svg class="w-5 h-5 text-navy" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h12m-.75 4.5H21m-3.75 0h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008z" />
                         </svg>
@@ -401,9 +368,9 @@ const greeting = computed(() => {
                     <div
                         v-for="c in churches"
                         :key="c.id"
-                        class="flex items-center gap-4 p-4 bg-gray-50/80 rounded-xl border border-transparent hover:border-gray-100 hover:bg-gray-50 transition-all duration-200"
+                        class="flex items-center gap-4 p-3 bg-gray-50/80 rounded-lg border border-transparent hover:border-gray-200 hover:bg-gray-50 transition-all duration-200"
                     >
-                        <div class="w-10 h-10 rounded-xl bg-navy/6 flex items-center justify-center shrink-0">
+                        <div class="w-10 h-10 rounded-lg bg-navy/6 flex items-center justify-center shrink-0">
                             <svg class="w-4.5 h-4.5 text-navy/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h12m-.75 4.5H21" />
                             </svg>

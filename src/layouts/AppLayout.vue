@@ -59,13 +59,42 @@ const navGroups: NavGroup[] = [
     },
 ]
 
-const switchTarget = computed(() => {
-    if (auth.isAdmin) return { label: 'Switch to Admin', route: 'admin-dashboard' }
-    if (auth.isPastor) return { label: 'Switch to Management', route: 'admin-my-team' }
-    if (auth.isNetworkLeader) return { label: 'Switch to Management', route: 'admin-my-network' }
-    if (auth.isLpathLeader) return { label: 'Switch to Management', route: 'admin-my-lpath' }
-    return null
+// View switcher
+type ViewMode = 'member' | 'admin' | 'ministry'
+const viewDropdownOpen = ref(false)
+
+const viewIcons: Record<ViewMode, string> = {
+    member: `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z"/>`,
+    admin: `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 010 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 010-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>`,
+    ministry: `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z"/>`,
+}
+
+const viewLabels: Record<ViewMode, string> = {
+    member: 'Member',
+    admin: 'Admin',
+    ministry: 'Ministry',
+}
+
+const viewOptions = computed(() => {
+    const options: ViewMode[] = ['member']
+    if (auth.isAdmin) options.push('admin')
+    if (auth.hasLeadershipRole) options.push('ministry')
+    return options
 })
+
+const hasOtherViews = computed(() => viewOptions.value.length > 1)
+
+function selectView(v: ViewMode) {
+    viewDropdownOpen.value = false
+    if (v === 'member') return
+    if (v === 'admin') {
+        router.push({ name: 'admin-dashboard' })
+    } else if (v === 'ministry') {
+        if (auth.isPastor) router.push({ name: 'admin-my-team' })
+        else if (auth.isNetworkLeader) router.push({ name: 'admin-my-network' })
+        else if (auth.isLpathLeader) router.push({ name: 'admin-my-lpath' })
+    }
+}
 
 async function handleLogout() {
     await auth.logout()
@@ -98,8 +127,47 @@ async function handleLogout() {
                 </div>
             </div>
 
+            <!-- View Switcher -->
+            <div v-if="hasOtherViews" class="px-4 pt-4 pb-2 relative">
+                <button
+                    @click="viewDropdownOpen = !viewDropdownOpen"
+                    class="flex items-center gap-3 w-full px-3 py-2.5 bg-white/8 border border-white/10 rounded-xl text-sm text-white/90 font-medium cursor-pointer hover:bg-white/12 focus:outline-none focus:ring-2 focus:ring-gold/30 transition-all"
+                >
+                    <svg class="w-4.5 h-4.5 text-white/50 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" v-html="viewIcons['member']" />
+                    <span class="flex-1 text-left">Member</span>
+                    <svg class="w-3.5 h-3.5 text-white/30 shrink-0 transition-transform duration-200" :class="viewDropdownOpen ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                    </svg>
+                </button>
+                <Transition
+                    enter-active-class="transition duration-150 ease-out"
+                    enter-from-class="opacity-0 -translate-y-1 scale-95"
+                    enter-to-class="opacity-100 translate-y-0 scale-100"
+                    leave-active-class="transition duration-100 ease-in"
+                    leave-from-class="opacity-100 translate-y-0 scale-100"
+                    leave-to-class="opacity-0 -translate-y-1 scale-95"
+                >
+                    <div v-if="viewDropdownOpen" class="absolute left-4 right-4 mt-1.5 bg-[#0d1a3a] rounded-xl border border-white/10 shadow-xl shadow-black/30 overflow-hidden z-10">
+                        <button
+                            v-for="opt in viewOptions"
+                            :key="opt"
+                            @click="selectView(opt)"
+                            class="flex items-center gap-3 w-full px-3 py-2.5 text-sm font-medium transition-colors"
+                            :class="opt === 'member' ? 'text-gold bg-white/8' : 'text-white/60 hover:text-white hover:bg-white/6'"
+                        >
+                            <svg class="w-4.5 h-4.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" v-html="viewIcons[opt]" />
+                            {{ viewLabels[opt] }}
+                            <svg v-if="opt === 'member'" class="w-3.5 h-3.5 ml-auto text-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.5 12.75l6 6 9-13.5" />
+                            </svg>
+                        </button>
+                    </div>
+                </Transition>
+                <div v-if="viewDropdownOpen" class="fixed inset-0 z-5" @click="viewDropdownOpen = false" />
+            </div>
+
             <!-- Nav -->
-            <nav class="flex-1 overflow-y-auto py-4 px-3">
+            <nav class="flex-1 overflow-y-auto py-2 px-3">
                 <div v-for="(group, gi) in navGroups" :key="group.title" :class="gi > 0 ? 'mt-6' : ''">
                     <p class="px-3 mb-1.5 text-[11px] font-semibold uppercase tracking-widest text-white/30">{{ group.title }}</p>
                     <div class="space-y-1">
@@ -120,18 +188,6 @@ async function handleLogout() {
 
             <!-- User footer (sticky bottom) -->
             <div class="shrink-0 border-t border-white/[0.08] px-3 py-3 relative">
-                <!-- Switch to Admin/Management -->
-                <router-link
-                    v-if="switchTarget"
-                    :to="{ name: switchTarget.route }"
-                    class="flex items-center gap-3 w-full px-4 py-2.5 mb-2 text-sm text-white/60 hover:text-white hover:bg-white/[0.06] rounded-2xl transition-colors"
-                >
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" />
-                    </svg>
-                    {{ switchTarget.label }}
-                </router-link>
-
                 <!-- User menu popup -->
                 <Transition
                     enter-active-class="transition duration-150 ease-out"

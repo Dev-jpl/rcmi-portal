@@ -63,6 +63,12 @@ export const adminRoutes: RouteRecordRaw[] = [
                 ]
             },
             {
+                path: 'default-events',
+                name: 'admin-default-events',
+                component: () => import('@/pages/admin/DefaultEventsPage.vue'),
+                meta: { roles: ['super_admin', 'admin'] }
+            },
+            {
                 path: 'attendance',
                 meta: { roles: ['super_admin', 'admin'] },
                 children: [

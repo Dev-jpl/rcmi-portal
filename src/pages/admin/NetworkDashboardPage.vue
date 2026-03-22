@@ -188,13 +188,13 @@ const tabs = [
 
         <!-- Stats -->
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-            <div class="bg-white rounded-xl border border-gray-200 p-4">
-                <p class="text-sm text-gray-500">L-Path Leaders</p>
-                <p class="text-2xl font-bold text-navy mt-1">{{ lpathLeaders.filter(l => l.is_active === 'Y').length }}</p>
+            <div class="bg-white rounded-lg border border-gray-200 p-4">
+                <p class="text-xs text-gray-500 uppercase tracking-wider">L-Path Leaders</p>
+                <p class="text-2xl font-heading font-bold text-navy">{{ lpathLeaders.filter(l => l.is_active === 'Y').length }}</p>
             </div>
-            <div class="bg-white rounded-xl border border-gray-200 p-4">
-                <p class="text-sm text-gray-500">L-Path Members</p>
-                <p class="text-2xl font-bold text-navy mt-1">{{ lpathMembers.filter(m => m.is_active === 'Y').length }}</p>
+            <div class="bg-white rounded-lg border border-gray-200 p-4">
+                <p class="text-xs text-gray-500 uppercase tracking-wider">L-Path Members</p>
+                <p class="text-2xl font-heading font-bold text-navy">{{ lpathMembers.filter(m => m.is_active === 'Y').length }}</p>
             </div>
         </div>
 
@@ -227,7 +227,7 @@ const tabs = [
         <!-- L-Path Leaders Tab -->
         <template v-else-if="activeTab === 'lpath-leaders'">
             <div v-if="!filteredLpathLeaders.length" class="text-center py-12 text-gray-400">No L-Path leaders found.</div>
-            <div v-else class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <div v-else class="bg-white rounded-lg border border-gray-200 overflow-hidden">
                 <div class="overflow-x-auto">
                     <table class="w-full text-sm">
                         <thead>
@@ -267,7 +267,7 @@ const tabs = [
         <!-- L-Path Members Tab -->
         <template v-else-if="activeTab === 'lpath-members'">
             <div v-if="!filteredLpathMembers.length" class="text-center py-12 text-gray-400">No L-Path members found.</div>
-            <div v-else class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <div v-else class="bg-white rounded-lg border border-gray-200 overflow-hidden">
                 <div class="overflow-x-auto">
                     <table class="w-full text-sm">
                         <thead>

@@ -83,7 +83,7 @@ onMounted(load)
             No audit entries found.
         </div>
 
-        <div v-else class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div v-else class="bg-white rounded-lg border border-gray-200 overflow-hidden">
             <div class="overflow-x-auto">
                 <table class="w-full text-sm">
                     <thead>

@@ -134,13 +134,13 @@ const graphEdges = computed<Edge[]>(() => {
 
         <!-- Stats -->
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-            <div class="bg-white rounded-xl border border-gray-200 p-4">
-                <p class="text-sm text-gray-500">Active Members</p>
-                <p class="text-2xl font-bold text-navy mt-1">{{ members.filter(m => m.is_active === 'Y').length }}</p>
+            <div class="bg-white rounded-lg border border-gray-200 p-4">
+                <p class="text-xs text-gray-500 uppercase tracking-wider">Active Members</p>
+                <p class="text-2xl font-heading font-bold text-navy">{{ members.filter(m => m.is_active === 'Y').length }}</p>
             </div>
-            <div class="bg-white rounded-xl border border-gray-200 p-4">
-                <p class="text-sm text-gray-500">Total Members</p>
-                <p class="text-2xl font-bold text-navy mt-1">{{ members.length }}</p>
+            <div class="bg-white rounded-lg border border-gray-200 p-4">
+                <p class="text-xs text-gray-500 uppercase tracking-wider">Total Members</p>
+                <p class="text-2xl font-heading font-bold text-navy">{{ members.length }}</p>
             </div>
         </div>
 
@@ -174,7 +174,7 @@ const graphEdges = computed<Edge[]>(() => {
 
         <div v-else-if="!filtered.length" class="text-center py-12 text-gray-400">No L-Path members found.</div>
 
-        <div v-else class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div v-else class="bg-white rounded-lg border border-gray-200 overflow-hidden">
             <div class="overflow-x-auto">
                 <table class="w-full text-sm">
                     <thead>

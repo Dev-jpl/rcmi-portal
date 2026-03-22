@@ -35,15 +35,16 @@ const allRsvps = ref<RsvpEntry[]>([])
 
 // Attendance
 const attendanceLogs = ref<AttendanceLog[]>([])
-const attendanceTab = ref<'logs' | 'manual' | 'qr'>('logs')
 const manualUserId = ref('')
+const showCheckInModal = ref(false)
+const checkInMode = ref<'manual' | 'qr'>('manual')
 const manualSaving = ref(false)
 const attendanceMessage = ref<{ type: 'success' | 'error'; text: string } | null>(null)
 const { scannedToken, scanning, error: scanError, start: startScanner, stop: stopScanner, reset: resetScanner } = useQRScanner('event-qr-reader')
 const qrProcessing = ref(false)
 
 onMounted(async () => {
-    await Promise.all([fetchEvent(), fetchRsvps(), fetchAttendance(), admin.fetchMembers()])
+    await Promise.all([fetchEvent(), fetchRsvps(), fetchAttendance(), fetchPosts(), admin.fetchMembers()])
     loading.value = false
 })
 
@@ -235,13 +236,106 @@ watch(scannedToken, (val) => {
     if (val) handleEventQRScan()
 })
 
-async function onAttendanceTabChange(tab: typeof attendanceTab.value) {
-    attendanceTab.value = tab
-    if (tab === 'qr') {
-        await nextTick()
-    } else {
-        stopScanner()
+function openCheckIn(mode: 'manual' | 'qr') {
+    checkInMode.value = mode
+    showCheckInModal.value = true
+    if (mode === 'qr') {
+        nextTick()
     }
+}
+
+function closeCheckInModal() {
+    showCheckInModal.value = false
+    stopScanner()
+}
+
+function getMemberName(userId: string | null) {
+    if (!userId) return '—'
+    const m = admin.members.find(m => m.user_id === userId)
+    return m ? `${m.first_name} ${m.last_name}` : '—'
+}
+
+// Event Posts (Facebook-style discussion)
+interface EventPost {
+    id: number
+    event_id: number
+    user_id: string
+    content: string
+    created_at: string
+    first_name?: string
+    last_name?: string
+    profile_photo_url?: string | null
+}
+
+const posts = ref<EventPost[]>([])
+const newPostContent = ref('')
+const postingComment = ref(false)
+
+async function fetchPosts() {
+    const eventId = Number(route.params.id)
+    const { data } = await supabase
+        .from('tbl_event_posts')
+        .select('*')
+        .eq('event_id', eventId)
+        .order('created_at', { ascending: true })
+
+    if (!data) return
+
+    const userIds = [...new Set(data.map((p: any) => p.user_id))]
+    if (!userIds.length) { posts.value = []; return }
+
+    const { data: profiles } = await supabase
+        .from('tbl_members_profile')
+        .select('user_id, first_name, last_name, profile_photo_url')
+        .in('user_id', userIds)
+
+    const profileMap = new Map(
+        (profiles ?? []).map((p) => [p.user_id, p]),
+    )
+
+    posts.value = data.map((p: any) => {
+        const profile = profileMap.get(p.user_id)
+        return {
+            ...p,
+            first_name: profile?.first_name ?? '',
+            last_name: profile?.last_name ?? '',
+            profile_photo_url: profile?.profile_photo_url ?? null,
+        }
+    })
+}
+
+async function submitPost() {
+    if (!newPostContent.value.trim() || !auth.session?.user) return
+    postingComment.value = true
+
+    await supabase.from('tbl_event_posts').insert({
+        event_id: Number(route.params.id),
+        user_id: auth.session.user.id,
+        content: newPostContent.value.trim(),
+    })
+
+    newPostContent.value = ''
+    await fetchPosts()
+    postingComment.value = false
+}
+
+async function deletePost(postId: number) {
+    await supabase.from('tbl_event_posts').delete().eq('id', postId)
+    await fetchPosts()
+}
+
+function formatPostTime(d: string) {
+    const now = new Date()
+    const date = new Date(d)
+    const diff = now.getTime() - date.getTime()
+    const minutes = Math.floor(diff / 60000)
+    if (minutes < 1) return 'Just now'
+    if (minutes < 60) return `${minutes}m ago`
+    const hours = Math.floor(minutes / 60)
+    if (hours < 24) return `${hours}h ago`
+    const days = Math.floor(hours / 24)
+    if (days < 7) return `${days}d ago`
+    return date.toLocaleDateString('en', { month: 'short', day: 'numeric' })
 }
 
 const goingList = computed(() => allRsvps.value.filter((r) => r.status === 'going'))
@@ -291,7 +385,7 @@ function getInitials(first: string, last: string) {
 
         <!-- Loading -->
         <div v-if="loading" class="space-y-4">
-            <div class="h-64 bg-gray-200 rounded-2xl animate-pulse" />
+            <div class="h-64 bg-gray-200 rounded-lg animate-pulse" />
             <div class="h-8 bg-gray-200 rounded w-1/2 animate-pulse" />
         </div>
 
@@ -299,14 +393,14 @@ function getInitials(first: string, last: string) {
             <!-- Message -->
             <p
                 v-if="message"
-                class="text-sm rounded-xl px-4 py-3 mb-4"
+                class="text-sm rounded-lg px-4 py-3 mb-4"
                 :class="message.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'"
             >
                 {{ message.text }}
             </p>
 
             <!-- Cover Photo with Upload -->
-            <div class="relative rounded-2xl overflow-hidden mb-6 group/cover">
+            <div class="relative rounded-lg overflow-hidden mb-6 group/cover">
                 <div class="h-56 sm:h-72 bg-gradient-to-br from-navy/10 to-navy/5">
                     <img
                         v-if="(event as any).cover_photo_url"
@@ -324,7 +418,7 @@ function getInitials(first: string, last: string) {
                 <!-- Upload overlay -->
                 <div class="absolute inset-0 bg-black/40 opacity-0 group-hover/cover:opacity-100 transition-opacity duration-300 flex items-center justify-center gap-3">
                     <label
-                        class="flex items-center gap-2 px-4 py-2.5 bg-white rounded-xl text-sm font-semibold text-navy cursor-pointer hover:bg-gray-50 transition-colors shadow-lg"
+                        class="flex items-center gap-2 px-4 py-2.5 bg-white rounded-lg text-sm font-semibold text-navy cursor-pointer hover:bg-gray-50 transition-colors shadow-lg"
                         :class="{ 'opacity-50 pointer-events-none': uploading }"
                     >
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -335,7 +429,7 @@ function getInitials(first: string, last: string) {
                     </label>
                     <button
                         v-if="(event as any).cover_photo_url"
-                        class="flex items-center gap-2 px-4 py-2.5 bg-red-500 rounded-xl text-sm font-semibold text-white hover:bg-red-600 transition-colors shadow-lg"
+                        class="flex items-center gap-2 px-4 py-2.5 bg-red-500 rounded-lg text-sm font-semibold text-white hover:bg-red-600 transition-colors shadow-lg"
                         :disabled="uploading"
                         @click="removeCover"
                     >
@@ -363,12 +457,12 @@ function getInitials(first: string, last: string) {
                 <!-- Left: Event Details -->
                 <div class="lg:col-span-2 space-y-6">
                     <!-- Event Info -->
-                    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 sm:p-8">
+                    <div class="bg-white rounded-lg border border-gray-200 p-6 sm:p-8">
                         <h1 class="text-2xl sm:text-3xl font-heading font-bold text-navy mb-5">{{ event.event_title }}</h1>
 
                         <div class="grid sm:grid-cols-2 gap-4 mb-6">
                             <div class="flex items-start gap-3.5">
-                                <div class="w-10 h-10 rounded-xl bg-navy/6 flex items-center justify-center shrink-0">
+                                <div class="w-10 h-10 rounded-lg bg-navy/6 flex items-center justify-center shrink-0">
                                     <svg class="w-5 h-5 text-navy" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
                                     </svg>
@@ -383,7 +477,7 @@ function getInitials(first: string, last: string) {
                                 </div>
                             </div>
                             <div class="flex items-start gap-3.5">
-                                <div class="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center shrink-0">
+                                <div class="w-10 h-10 rounded-lg bg-emerald-50 flex items-center justify-center shrink-0">
                                     <svg class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
                                     </svg>
@@ -408,28 +502,11 @@ function getInitials(first: string, last: string) {
                     </div>
 
                     <!-- Attendance Section -->
-                    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 sm:p-8">
+                    <div class="bg-white rounded-lg border border-gray-200 p-6 sm:p-8">
                         <h2 class="font-heading font-semibold text-navy text-lg mb-5">
                             Attendance
                             <span class="text-sm font-normal text-gray-400 ml-2">{{ attendanceLogs.length }} logged</span>
                         </h2>
-
-                        <!-- Attendance tabs -->
-                        <div class="flex gap-1 bg-gray-100 rounded-lg p-1 mb-5">
-                            <button
-                                v-for="tab in [
-                                    { key: 'logs' as const, label: 'Logs' },
-                                    { key: 'manual' as const, label: 'Manual Check-In' },
-                                    { key: 'qr' as const, label: 'QR Scan' },
-                                ]"
-                                :key="tab.key"
-                                class="flex-1 px-3 py-2 text-sm font-medium rounded-md transition-colors"
-                                :class="attendanceTab === tab.key ? 'bg-white text-navy shadow-sm' : 'text-gray-500 hover:text-gray-700'"
-                                @click="onAttendanceTabChange(tab.key)"
-                            >
-                                {{ tab.label }}
-                            </button>
-                        </div>
 
                         <!-- Attendance message -->
                         <p
@@ -440,113 +517,57 @@ function getInitials(first: string, last: string) {
                             {{ attendanceMessage.text }}
                         </p>
 
-                        <!-- Logs tab -->
-                        <div v-if="attendanceTab === 'logs'">
-                            <div v-if="!attendanceLogs.length" class="text-center py-8 text-gray-400 text-sm">No attendance logged yet.</div>
-                            <div v-else class="space-y-1 max-h-96 overflow-y-auto">
-                                <div
-                                    v-for="log in attendanceLogs"
-                                    :key="log.id"
-                                    class="flex items-center justify-between p-3 rounded-xl hover:bg-gray-50 transition-colors"
-                                >
-                                    <div class="flex items-center gap-3">
-                                        <div class="w-8 h-8 rounded-full bg-navy/6 flex items-center justify-center text-xs font-bold text-navy/50 shrink-0">
-                                            {{ (log.logged_by_name ?? '?')[0] }}
-                                        </div>
-                                        <div>
-                                            <p class="text-sm font-medium text-gray-900">{{ log.logged_by_name ?? '—' }}</p>
-                                            <p class="text-xs text-gray-400">{{ formatTime(log.logged_at) }}</p>
-                                        </div>
+                        <div v-if="!attendanceLogs.length" class="text-center py-8 text-gray-400 text-sm">No attendance logged yet.</div>
+                        <div v-else class="space-y-1 max-h-96 overflow-y-auto">
+                            <div
+                                v-for="log in attendanceLogs"
+                                :key="log.id"
+                                class="flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 transition-colors"
+                            >
+                                <div class="flex items-center gap-3">
+                                    <div class="w-8 h-8 rounded-full bg-navy/6 flex items-center justify-center text-xs font-bold text-navy/50 shrink-0">
+                                        {{ getMemberName(log.user_id)[0] }}
                                     </div>
-                                    <span
-                                        class="text-xs px-2 py-0.5 rounded-full font-medium"
-                                        :class="{
-                                            'bg-blue-100 text-blue-700': log.input_method === 'QR',
-                                            'bg-green-100 text-green-700': log.input_method === 'self',
-                                            'bg-gray-100 text-gray-600': log.input_method === 'manual',
-                                        }"
-                                    >
-                                        {{ log.input_method }}
-                                    </span>
+                                    <div>
+                                        <p class="text-sm font-medium text-gray-900">{{ getMemberName(log.user_id) }}</p>
+                                        <p class="text-xs text-gray-400">{{ formatTime(log.logged_at) }} &middot; by {{ log.logged_by_name ?? '—' }}</p>
+                                    </div>
                                 </div>
+                                <span
+                                    class="text-xs px-2 py-0.5 rounded-full font-medium"
+                                    :class="{
+                                        'bg-blue-100 text-blue-700': log.input_method === 'QR',
+                                        'bg-green-100 text-green-700': log.input_method === 'self',
+                                        'bg-gray-100 text-gray-600': log.input_method === 'manual',
+                                    }"
+                                >
+                                    {{ log.input_method }}
+                                </span>
                             </div>
-                        </div>
-
-                        <!-- Manual check-in tab -->
-                        <div v-else-if="attendanceTab === 'manual'">
-                            <form @submit.prevent="handleManualCheckIn" class="space-y-4">
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Member</label>
-                                    <select
-                                        v-model="manualUserId"
-                                        required
-                                        class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-navy/30"
-                                    >
-                                        <option value="" disabled>Select member</option>
-                                        <option
-                                            v-for="m in admin.members.filter(m => m.status === 'approved')"
-                                            :key="m.user_id"
-                                            :value="m.user_id"
-                                        >
-                                            {{ m.first_name }} {{ m.last_name }}
-                                        </option>
-                                    </select>
-                                </div>
-                                <button
-                                    type="submit"
-                                    :disabled="manualSaving || !manualUserId"
-                                    class="w-full py-2.5 bg-navy text-white font-semibold rounded-lg hover:bg-navy-700 disabled:opacity-50 transition-colors text-sm"
-                                >
-                                    {{ manualSaving ? 'Checking in...' : 'Check In' }}
-                                </button>
-                            </form>
-                        </div>
-
-                        <!-- QR scan tab -->
-                        <div v-else-if="attendanceTab === 'qr'">
-                            <div id="event-qr-reader" class="w-full mb-4 rounded-lg overflow-hidden" />
-                            <div class="flex gap-3">
-                                <button
-                                    v-if="!scanning"
-                                    class="flex-1 py-2.5 bg-navy text-white font-semibold rounded-lg hover:bg-navy-700 transition-colors text-sm"
-                                    @click="startScanner"
-                                >
-                                    Start Scanning
-                                </button>
-                                <button
-                                    v-else
-                                    class="flex-1 py-2.5 bg-red-500 text-white font-semibold rounded-lg hover:bg-red-600 transition-colors text-sm"
-                                    @click="stopScanner"
-                                >
-                                    Stop
-                                </button>
-                            </div>
-                            <p v-if="scanError" class="text-sm text-red-600 mt-3">{{ scanError }}</p>
-                            <p v-if="qrProcessing" class="text-sm text-navy mt-3">Processing scan...</p>
                         </div>
                     </div>
 
                     <!-- RSVP Lists -->
-                    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 sm:p-8">
+                    <div class="bg-white rounded-lg border border-gray-200 p-6 sm:p-8">
                         <h2 class="font-heading font-semibold text-navy text-lg mb-5">RSVP Attendees</h2>
 
-                        <div class="flex items-center bg-gray-50 rounded-xl p-1 border border-gray-100 mb-5">
+                        <div class="inline-flex gap-0.5 bg-gray-100/80 rounded-md p-0.5 mb-5">
                             <button
-                                class="flex-1 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200"
+                                class="flex-1 px-2.5 py-1 rounded text-[11px] font-medium transition-all"
                                 :class="rsvpTab === 'going' ? 'bg-white text-green-700 shadow-sm' : 'text-gray-400 hover:text-gray-600'"
                                 @click="rsvpTab = 'going'"
                             >
                                 <span class="hidden sm:inline">Going</span> ({{ goingList.length }})
                             </button>
                             <button
-                                class="flex-1 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200"
+                                class="flex-1 px-2.5 py-1 rounded text-[11px] font-medium transition-all"
                                 :class="rsvpTab === 'maybe' ? 'bg-white text-amber-700 shadow-sm' : 'text-gray-400 hover:text-gray-600'"
                                 @click="rsvpTab = 'maybe'"
                             >
                                 <span class="hidden sm:inline">Maybe</span> ({{ maybeList.length }})
                             </button>
                             <button
-                                class="flex-1 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200"
+                                class="flex-1 px-2.5 py-1 rounded text-[11px] font-medium transition-all"
                                 :class="rsvpTab === 'not_going' ? 'bg-white text-red-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'"
                                 @click="rsvpTab = 'not_going'"
                             >
@@ -561,9 +582,9 @@ function getInitials(first: string, last: string) {
                             <div
                                 v-for="person in activeList"
                                 :key="person.id"
-                                class="flex items-center gap-3.5 p-3 rounded-xl hover:bg-gray-50 transition-colors"
+                                class="flex items-center gap-3.5 p-3 rounded-lg hover:bg-gray-50 transition-colors"
                             >
-                                <div class="w-10 h-10 rounded-xl bg-navy/6 flex items-center justify-center text-sm font-bold text-navy/50 shrink-0">
+                                <div class="w-10 h-10 rounded-lg bg-navy/6 flex items-center justify-center text-sm font-bold text-navy/50 shrink-0">
                                     {{ getInitials(person.first_name ?? '', person.last_name ?? '') }}
                                 </div>
                                 <div class="min-w-0 flex-1">
@@ -589,8 +610,31 @@ function getInitials(first: string, last: string) {
 
                 <!-- Right sidebar: Quick Stats -->
                 <div class="space-y-6">
+                    <!-- Check-In Actions -->
+                    <div class="flex flex-col gap-3">
+                        <button
+                            @click="openCheckIn('manual')"
+                            class="flex items-center justify-center gap-2 w-full py-3 bg-navy text-white font-semibold rounded-lg hover:bg-navy-700 transition-colors text-sm shadow-sm"
+                        >
+                            <svg class="w-4.5 h-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zM4 19.235v-.11a6.375 6.375 0 0112.75 0v.109A12.318 12.318 0 0110.374 21c-2.331 0-4.512-.645-6.374-1.766z" />
+                            </svg>
+                            Manual Check-In
+                        </button>
+                        <button
+                            @click="openCheckIn('qr')"
+                            class="flex items-center justify-center gap-2 w-full py-3 bg-white border border-gray-200 text-navy font-semibold rounded-lg hover:bg-gray-50 transition-colors text-sm shadow-sm"
+                        >
+                            <svg class="w-4.5 h-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 013.75 9.375v-4.5zM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5zM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0113.5 9.375v-4.5z" />
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6.75 6.75h.75v.75h-.75v-.75zM6.75 16.5h.75v.75h-.75v-.75zM16.5 6.75h.75v.75h-.75v-.75zM13.5 13.5h.75v.75h-.75v-.75zM13.5 19.5h.75v.75h-.75v-.75zM19.5 13.5h.75v.75h-.75v-.75zM19.5 19.5h.75v.75h-.75v-.75zM16.5 16.5h.75v.75h-.75v-.75z" />
+                            </svg>
+                            QR Scanner
+                        </button>
+                    </div>
+
                     <!-- Summary Card -->
-                    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+                    <div class="bg-white rounded-lg border border-gray-200 p-6">
                         <h3 class="font-heading font-semibold text-navy mb-4">Quick Stats</h3>
                         <div class="space-y-4">
                             <div class="flex items-center justify-between">
@@ -630,7 +674,7 @@ function getInitials(first: string, last: string) {
                     </div>
 
                     <!-- Event Meta -->
-                    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+                    <div class="bg-white rounded-lg border border-gray-200 p-6">
                         <h3 class="font-heading font-semibold text-navy mb-4">Details</h3>
                         <div class="space-y-3">
                             <div>
@@ -658,10 +702,192 @@ function getInitials(first: string, last: string) {
                     </div>
                 </div>
             </div>
+
+            <!-- Discussion / Posts -->
+            <div class="bg-white rounded-lg border border-gray-200 p-6 sm:p-8">
+                <div class="flex items-center justify-between mb-5">
+                    <h2 class="font-heading font-semibold text-navy text-lg">Discussion</h2>
+                    <span class="text-xs text-gray-400">{{ posts.length }} post{{ posts.length !== 1 ? 's' : '' }}</span>
+                </div>
+
+                <!-- New Post -->
+                <div class="flex items-start gap-3 mb-6">
+                    <div class="w-9 h-9 rounded-full bg-navy/6 flex items-center justify-center text-xs font-bold text-navy/50 shrink-0">
+                        {{ (auth.user?.first_name?.[0] ?? '') + (auth.user?.last_name?.[0] ?? '') }}
+                    </div>
+                    <div class="flex-1">
+                        <textarea
+                            v-model="newPostContent"
+                            rows="2"
+                            placeholder="Post an update about this event..."
+                            class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-navy/20 focus:border-navy resize-none"
+                        />
+                        <div class="flex justify-end mt-2">
+                            <button
+                                @click="submitPost"
+                                :disabled="!newPostContent.trim() || postingComment"
+                                class="px-4 py-2 bg-navy text-white text-xs font-semibold rounded-lg hover:bg-navy-700 disabled:opacity-50 transition-colors"
+                            >
+                                {{ postingComment ? 'Posting...' : 'Post' }}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Posts List -->
+                <div v-if="!posts.length" class="text-center py-8 text-gray-400 text-sm">
+                    No posts yet. Share an update with attendees!
+                </div>
+                <div v-else class="space-y-4">
+                    <div
+                        v-for="post in posts"
+                        :key="post.id"
+                        class="flex items-start gap-3 p-4 rounded-lg bg-gray-50/80 border border-transparent hover:border-gray-100 transition-all"
+                    >
+                        <img
+                            v-if="post.profile_photo_url"
+                            :src="post.profile_photo_url"
+                            class="w-9 h-9 rounded-full object-cover shrink-0"
+                        />
+                        <div v-else class="w-9 h-9 rounded-full bg-navy/6 flex items-center justify-center text-xs font-bold text-navy/50 shrink-0">
+                            {{ (post.first_name?.[0] ?? '') + (post.last_name?.[0] ?? '') }}
+                        </div>
+                        <div class="min-w-0 flex-1">
+                            <div class="flex items-center gap-2">
+                                <p class="text-sm font-semibold text-gray-900">
+                                    {{ post.first_name }} {{ post.last_name }}
+                                    <span v-if="post.user_id === auth.session?.user?.id" class="text-xs text-navy/40 font-normal ml-1">(You)</span>
+                                </p>
+                                <span class="text-[11px] text-gray-300">{{ formatPostTime(post.created_at) }}</span>
+                            </div>
+                            <p class="text-sm text-gray-600 mt-1 whitespace-pre-line">{{ post.content }}</p>
+                        </div>
+                        <!-- Admin can delete any post -->
+                        <button
+                            @click="deletePost(post.id)"
+                            class="p-1 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors shrink-0"
+                            title="Delete post"
+                        >
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
         </template>
 
         <div v-else class="text-center py-16 text-gray-400">
             <p class="text-sm">Event not found</p>
         </div>
+
+        <!-- Check-In Modal -->
+        <Teleport to="body">
+            <Transition
+                enter-active-class="transition-opacity duration-200"
+                leave-active-class="transition-opacity duration-200"
+                enter-from-class="opacity-0"
+                leave-to-class="opacity-0"
+            >
+                <div v-if="showCheckInModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" @click.self="closeCheckInModal">
+                    <div class="bg-white rounded-lg shadow-xl w-full max-w-md overflow-hidden">
+                        <!-- Modal Header -->
+                        <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+                            <h3 class="font-heading font-semibold text-navy text-lg">
+                                {{ checkInMode === 'manual' ? 'Manual Check-In' : 'QR Scanner' }}
+                            </h3>
+                            <button @click="closeCheckInModal" class="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+
+                        <!-- Modal Tabs -->
+                        <div class="inline-flex gap-0.5 bg-gray-100/80 rounded-md p-0.5 mx-6 mt-4">
+                            <button
+                                class="px-2.5 py-1 text-[11px] font-medium rounded transition-all"
+                                :class="checkInMode === 'manual' ? 'bg-white text-navy shadow-sm' : 'text-gray-400 hover:text-gray-600'"
+                                @click="checkInMode = 'manual'; stopScanner()"
+                            >
+                                Manual
+                            </button>
+                            <button
+                                class="px-2.5 py-1 text-[11px] font-medium rounded transition-all"
+                                :class="checkInMode === 'qr' ? 'bg-white text-navy shadow-sm' : 'text-gray-400 hover:text-gray-600'"
+                                @click="checkInMode = 'qr'"
+                            >
+                                QR Scan
+                            </button>
+                        </div>
+
+                        <!-- Modal Body -->
+                        <div class="p-6">
+                            <!-- Attendance message -->
+                            <p
+                                v-if="attendanceMessage"
+                                class="text-sm rounded-lg px-4 py-2 mb-4"
+                                :class="attendanceMessage.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'"
+                            >
+                                {{ attendanceMessage.text }}
+                            </p>
+
+                            <!-- Manual Check-In -->
+                            <div v-if="checkInMode === 'manual'">
+                                <form @submit.prevent="handleManualCheckIn" class="space-y-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Member</label>
+                                        <select
+                                            v-model="manualUserId"
+                                            required
+                                            class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-navy/30"
+                                        >
+                                            <option value="" disabled>Select member</option>
+                                            <option
+                                                v-for="m in admin.members.filter((m: any) => m.status === 'approved')"
+                                                :key="m.user_id"
+                                                :value="m.user_id"
+                                            >
+                                                {{ m.first_name }} {{ m.last_name }}
+                                            </option>
+                                        </select>
+                                    </div>
+                                    <button
+                                        type="submit"
+                                        :disabled="manualSaving || !manualUserId"
+                                        class="w-full py-2.5 bg-navy text-white font-semibold rounded-lg hover:bg-navy-700 disabled:opacity-50 transition-colors text-sm"
+                                    >
+                                        {{ manualSaving ? 'Checking in...' : 'Check In' }}
+                                    </button>
+                                </form>
+                            </div>
+
+                            <!-- QR Scan -->
+                            <div v-else>
+                                <div id="event-qr-reader" class="w-full mb-4 rounded-lg overflow-hidden" />
+                                <div class="flex gap-3">
+                                    <button
+                                        v-if="!scanning"
+                                        class="flex-1 py-2.5 bg-navy text-white font-semibold rounded-lg hover:bg-navy-700 transition-colors text-sm"
+                                        @click="startScanner"
+                                    >
+                                        Start Scanning
+                                    </button>
+                                    <button
+                                        v-else
+                                        class="flex-1 py-2.5 bg-red-500 text-white font-semibold rounded-lg hover:bg-red-600 transition-colors text-sm"
+                                        @click="stopScanner"
+                                    >
+                                        Stop
+                                    </button>
+                                </div>
+                                <p v-if="scanError" class="text-sm text-red-600 mt-3">{{ scanError }}</p>
+                                <p v-if="qrProcessing" class="text-sm text-navy mt-3">Processing scan...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </Transition>
+        </Teleport>
     </div>
 </template>

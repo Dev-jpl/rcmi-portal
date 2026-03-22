@@ -81,7 +81,7 @@ onMounted(() => store.fetchAnnouncements())
             <div
                 v-for="a in store.announcements"
                 :key="a.id"
-                class="bg-white rounded-xl border border-gray-200 p-4 flex items-start gap-4"
+                class="bg-white rounded-lg border border-gray-200 p-4 flex items-start gap-4"
                 :class="{ 'border-gold': a.is_pinned }"
             >
                 <div class="flex-1 min-w-0">
@@ -108,7 +108,7 @@ onMounted(() => store.fetchAnnouncements())
                 class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
                 @click.self="modalOpen = false"
             >
-                <div class="bg-white rounded-2xl shadow-xl w-full max-w-lg">
+                <div class="bg-white rounded-lg shadow-xl w-full max-w-lg">
                     <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200">
                         <h3 class="text-lg font-heading font-bold text-navy">
                             {{ editing ? 'Edit Announcement' : 'New Announcement' }}

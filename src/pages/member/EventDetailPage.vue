@@ -31,7 +31,7 @@ const myRsvpId = ref<string | null>(null)
 const rsvpLoading = ref(false)
 
 onMounted(async () => {
-    await Promise.all([fetchEvent(), fetchRsvps()])
+    await Promise.all([fetchEvent(), fetchRsvps(), fetchPosts()])
     loading.value = false
 })
 
@@ -115,6 +115,87 @@ async function handleRsvp(status: 'going' | 'maybe' | 'not_going') {
 
     await fetchRsvps()
     rsvpLoading.value = false
+}
+
+// Event Posts (Facebook-style discussion)
+interface EventPost {
+    id: number
+    event_id: number
+    user_id: string
+    content: string
+    created_at: string
+    first_name?: string
+    last_name?: string
+    profile_photo_url?: string | null
+}
+
+const posts = ref<EventPost[]>([])
+const newPostContent = ref('')
+const postingComment = ref(false)
+
+async function fetchPosts() {
+    const eventId = Number(route.params.id)
+    const { data } = await supabase
+        .from('tbl_event_posts')
+        .select('*')
+        .eq('event_id', eventId)
+        .order('created_at', { ascending: true })
+
+    if (!data) return
+
+    const userIds = [...new Set(data.map((p: any) => p.user_id))]
+    const { data: profiles } = await supabase
+        .from('tbl_members_profile')
+        .select('user_id, first_name, last_name, profile_photo_url')
+        .in('user_id', userIds)
+
+    const profileMap = new Map(
+        (profiles ?? []).map((p) => [p.user_id, p]),
+    )
+
+    posts.value = data.map((p: any) => {
+        const profile = profileMap.get(p.user_id)
+        return {
+            ...p,
+            first_name: profile?.first_name ?? '',
+            last_name: profile?.last_name ?? '',
+            profile_photo_url: profile?.profile_photo_url ?? null,
+        }
+    })
+}
+
+async function submitPost() {
+    if (!newPostContent.value.trim() || !auth.session?.user) return
+    postingComment.value = true
+
+    await supabase.from('tbl_event_posts').insert({
+        event_id: Number(route.params.id),
+        user_id: auth.session.user.id,
+        content: newPostContent.value.trim(),
+    })
+
+    newPostContent.value = ''
+    await fetchPosts()
+    postingComment.value = false
+}
+
+async function deletePost(postId: number) {
+    await supabase.from('tbl_event_posts').delete().eq('id', postId)
+    await fetchPosts()
+}
+
+function formatPostTime(d: string) {
+    const now = new Date()
+    const date = new Date(d)
+    const diff = now.getTime() - date.getTime()
+    const minutes = Math.floor(diff / 60000)
+    if (minutes < 1) return 'Just now'
+    if (minutes < 60) return `${minutes}m ago`
+    const hours = Math.floor(minutes / 60)
+    if (hours < 24) return `${hours}h ago`
+    const days = Math.floor(hours / 24)
+    if (days < 7) return `${days}d ago`
+    return date.toLocaleDateString('en', { month: 'short', day: 'numeric' })
 }
 
 const goingList = computed(() => allRsvps.value.filter((r) => r.status === 'going'))
@@ -343,6 +424,76 @@ function generateGoogleCalUrl() {
                             </p>
                             <p class="text-xs text-gray-400 truncate">{{ person.email }}</p>
                         </div>
+                    </div>
+                </div>
+            </div>
+            <!-- Discussion / Posts -->
+            <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 sm:p-8">
+                <h2 class="font-heading font-semibold text-navy text-lg mb-5">Discussion</h2>
+
+                <!-- New Post -->
+                <div class="flex items-start gap-3 mb-6">
+                    <div class="w-9 h-9 rounded-full bg-navy/6 flex items-center justify-center text-xs font-bold text-navy/50 shrink-0">
+                        {{ (auth.user?.first_name?.[0] ?? '') + (auth.user?.last_name?.[0] ?? '') }}
+                    </div>
+                    <div class="flex-1">
+                        <textarea
+                            v-model="newPostContent"
+                            rows="2"
+                            placeholder="Write something about this event..."
+                            class="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-navy/20 focus:border-navy resize-none"
+                        />
+                        <div class="flex justify-end mt-2">
+                            <button
+                                @click="submitPost"
+                                :disabled="!newPostContent.trim() || postingComment"
+                                class="px-4 py-2 bg-navy text-white text-xs font-semibold rounded-lg hover:bg-navy-700 disabled:opacity-50 transition-colors"
+                            >
+                                {{ postingComment ? 'Posting...' : 'Post' }}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Posts List -->
+                <div v-if="!posts.length" class="text-center py-8 text-gray-400 text-sm">
+                    No posts yet. Be the first to start the discussion!
+                </div>
+                <div v-else class="space-y-4">
+                    <div
+                        v-for="post in posts"
+                        :key="post.id"
+                        class="flex items-start gap-3 p-4 rounded-xl bg-gray-50/80 border border-transparent hover:border-gray-100 transition-all"
+                    >
+                        <img
+                            v-if="post.profile_photo_url"
+                            :src="post.profile_photo_url"
+                            class="w-9 h-9 rounded-full object-cover shrink-0"
+                        />
+                        <div v-else class="w-9 h-9 rounded-full bg-navy/6 flex items-center justify-center text-xs font-bold text-navy/50 shrink-0">
+                            {{ (post.first_name?.[0] ?? '') + (post.last_name?.[0] ?? '') }}
+                        </div>
+                        <div class="min-w-0 flex-1">
+                            <div class="flex items-center gap-2">
+                                <p class="text-sm font-semibold text-gray-900">
+                                    {{ post.first_name }} {{ post.last_name }}
+                                    <span v-if="post.user_id === auth.session?.user?.id" class="text-xs text-navy/40 font-normal ml-1">(You)</span>
+                                </p>
+                                <span class="text-[11px] text-gray-300">{{ formatPostTime(post.created_at) }}</span>
+                            </div>
+                            <p class="text-sm text-gray-600 mt-1 whitespace-pre-line">{{ post.content }}</p>
+                        </div>
+                        <!-- Delete own post -->
+                        <button
+                            v-if="post.user_id === auth.session?.user?.id"
+                            @click="deletePost(post.id)"
+                            class="p-1 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors shrink-0"
+                            title="Delete post"
+                        >
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                            </svg>
+                        </button>
                     </div>
                 </div>
             </div>

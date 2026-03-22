@@ -54,13 +54,13 @@ const statusColors: Record<string, string> = {
 
         <!-- Loading -->
         <div v-if="loading" class="space-y-4">
-            <div class="h-32 bg-gray-200 rounded-xl animate-pulse" />
-            <div class="h-64 bg-gray-200 rounded-xl animate-pulse" />
+            <div class="h-32 bg-gray-200 rounded-lg animate-pulse" />
+            <div class="h-64 bg-gray-200 rounded-lg animate-pulse" />
         </div>
 
         <template v-else-if="profile">
             <!-- Profile header -->
-            <div class="bg-white rounded-xl border border-gray-200 p-6 mb-6">
+            <div class="bg-white rounded-lg border border-gray-200 p-6 mb-6">
                 <div class="flex items-start gap-5">
                     <div class="w-16 h-16 rounded-full bg-navy-100 flex items-center justify-center text-xl font-bold text-navy shrink-0 overflow-hidden">
                         <img v-if="profile.profile_photo_url" :src="profile.profile_photo_url" class="w-full h-full object-cover" />
@@ -91,7 +91,7 @@ const statusColors: Record<string, string> = {
 
             <div class="grid lg:grid-cols-2 gap-6">
                 <!-- Network info -->
-                <div class="bg-white rounded-xl border border-gray-200 p-5">
+                <div class="bg-white rounded-lg border border-gray-200 p-5">
                     <h2 class="font-heading font-semibold text-navy mb-4">Network Info</h2>
                     <div class="space-y-2 text-sm">
                         <div class="flex justify-between">
@@ -114,7 +114,7 @@ const statusColors: Record<string, string> = {
                 </div>
 
                 <!-- Ministry involvements -->
-                <div class="bg-white rounded-xl border border-gray-200 p-5">
+                <div class="bg-white rounded-lg border border-gray-200 p-5">
                     <h2 class="font-heading font-semibold text-navy mb-4">Ministry Involvements</h2>
                     <div v-if="!ministries.length" class="text-sm text-gray-400 text-center py-4">No ministry records</div>
                     <div v-else class="space-y-2">
@@ -139,7 +139,7 @@ const statusColors: Record<string, string> = {
             </div>
 
             <!-- Attendance history -->
-            <div class="bg-white rounded-xl border border-gray-200 p-5 mt-6">
+            <div class="bg-white rounded-lg border border-gray-200 p-5 mt-6">
                 <h2 class="font-heading font-semibold text-navy mb-4">Attendance History</h2>
                 <div v-if="!attendance.length" class="text-sm text-gray-400 text-center py-4">No attendance records</div>
                 <div v-else class="overflow-x-auto">

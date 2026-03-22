@@ -26,7 +26,7 @@ onMounted(async () => {
     dateFrom.value = thirtyAgo.toISOString().split('T')[0]
     dateTo.value = now.toISOString().split('T')[0]
 
-    await Promise.all([fetchLogs(), fetchChurches()])
+    await Promise.all([fetchLogs(), fetchChurches(), admin.fetchMembers()])
     loading.value = false
 })
 
@@ -94,6 +94,7 @@ const summary = computed(() => {
 function exportToExcel() {
     const rows = filtered.value.map((l) => ({
         Date: l.log_date ?? '',
+        Member: getMemberName(l.user_id),
         Event: l.event_title ?? '',
         'Logged By': l.logged_by_name ?? '',
         Location: l.logged_location_name ?? '',
@@ -105,6 +106,12 @@ function exportToExcel() {
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Attendance')
     XLSX.writeFile(wb, `attendance-report-${dateFrom.value}-to-${dateTo.value}.xlsx`)
+}
+
+function getMemberName(userId: string | null) {
+    if (!userId) return '—'
+    const m = admin.members.find(m => m.user_id === userId)
+    return m ? `${m.first_name} ${m.last_name}` : '—'
 }
 
 function formatDate(d: string | null) {
@@ -129,7 +136,7 @@ function formatDate(d: string | null) {
         </div>
 
         <!-- Filter panel -->
-        <div class="bg-white rounded-xl border border-gray-200 p-5 mb-6">
+        <div class="bg-white rounded-lg border border-gray-200 p-5 mb-6">
             <h2 class="font-heading font-semibold text-navy mb-3">Filters</h2>
             <div class="flex flex-wrap gap-3 items-end">
                 <div>
@@ -178,19 +185,19 @@ function formatDate(d: string | null) {
 
         <!-- Summary cards -->
         <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-            <div class="bg-white rounded-xl p-4 border border-gray-200">
+            <div class="bg-white rounded-lg p-4 border border-gray-200">
                 <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Total Logs</p>
                 <p class="text-2xl font-heading font-bold text-navy">{{ summary.total }}</p>
             </div>
-            <div class="bg-white rounded-xl p-4 border border-gray-200">
+            <div class="bg-white rounded-lg p-4 border border-gray-200">
                 <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Unique Members</p>
                 <p class="text-2xl font-heading font-bold text-navy">{{ summary.uniqueMembers }}</p>
             </div>
-            <div class="bg-white rounded-xl p-4 border border-gray-200">
+            <div class="bg-white rounded-lg p-4 border border-gray-200">
                 <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Events Covered</p>
                 <p class="text-2xl font-heading font-bold text-navy">{{ summary.uniqueEvents }}</p>
             </div>
-            <div class="bg-white rounded-xl p-4 border border-gray-200">
+            <div class="bg-white rounded-lg p-4 border border-gray-200">
                 <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Methods</p>
                 <div class="flex gap-2 mt-1">
                     <span
@@ -205,7 +212,7 @@ function formatDate(d: string | null) {
         </div>
 
         <!-- By location breakdown -->
-        <div v-if="Object.keys(summary.byLocation).length > 1" class="bg-white rounded-xl border border-gray-200 p-5 mb-6">
+        <div v-if="Object.keys(summary.byLocation).length > 1" class="bg-white rounded-lg border border-gray-200 p-5 mb-6">
             <h2 class="font-heading font-semibold text-navy mb-3">By Location</h2>
             <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                 <div
@@ -226,12 +233,13 @@ function formatDate(d: string | null) {
 
         <div v-else-if="!filtered.length" class="text-center py-12 text-gray-400">No records for selected filters.</div>
 
-        <div v-else class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div v-else class="bg-white rounded-lg border border-gray-200 overflow-hidden">
             <div class="overflow-x-auto">
                 <table class="w-full text-sm">
                     <thead>
                         <tr class="bg-gray-50 text-left text-gray-500 font-medium">
                             <th class="px-4 py-3">Date</th>
+                            <th class="px-4 py-3">Member</th>
                             <th class="px-4 py-3">Event</th>
                             <th class="px-4 py-3 hidden md:table-cell">Logged By</th>
                             <th class="px-4 py-3 hidden md:table-cell">Location</th>
@@ -242,6 +250,7 @@ function formatDate(d: string | null) {
                     <tbody class="divide-y divide-gray-100">
                         <tr v-for="log in filtered.slice(0, 100)" :key="log.id" class="hover:bg-gray-50/50">
                             <td class="px-4 py-3 text-gray-900">{{ formatDate(log.log_date) }}</td>
+                            <td class="px-4 py-3 font-medium text-gray-900">{{ getMemberName(log.user_id) }}</td>
                             <td class="px-4 py-3 font-medium text-gray-900">{{ log.event_title ?? '—' }}</td>
                             <td class="px-4 py-3 text-gray-500 hidden md:table-cell">{{ log.logged_by_name ?? '—' }}</td>
                             <td class="px-4 py-3 text-gray-500 hidden md:table-cell">{{ log.logged_location_name ?? '—' }}</td>
