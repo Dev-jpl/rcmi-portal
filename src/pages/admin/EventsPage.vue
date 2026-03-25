@@ -34,6 +34,9 @@ const saving = ref(false)
 const error = ref<string | null>(null)
 const churches = ref<{ id: number; church_name: string }[]>([])
 const form = ref(getEventDefaults())
+const deleteTarget = ref<Event | null>(null)
+const showDeleteModal = ref(false)
+const deleting = ref(false)
 
 function getEventDefaults() {
     return {
@@ -150,6 +153,23 @@ async function handleSaveEvent() {
 
 async function handleToggle(event: Event) {
     await eventStore.toggleActive(event)
+}
+
+function openDeleteEvent(event: Event) {
+    deleteTarget.value = event
+    showDeleteModal.value = true
+}
+
+async function handleDeleteEvent() {
+    if (!deleteTarget.value) return
+    deleting.value = true
+    const result = await eventStore.deleteEvent(deleteTarget.value.id)
+    if (!result.success) {
+        error.value = result.error ?? 'Failed to delete event.'
+    }
+    showDeleteModal.value = false
+    deleteTarget.value = null
+    deleting.value = false
 }
 
 function formatDate(d: string | null) {
@@ -377,6 +397,8 @@ function formatTime(t: string | null) {
                             </router-link>
                             <span class="text-gray-200">&middot;</span>
                             <button class="text-xs text-gray-500 hover:text-navy font-medium" @click="openEditEvent(evt)">Edit</button>
+                            <span class="text-gray-200">&middot;</span>
+                            <button class="text-xs text-red-400 hover:text-red-600 font-medium" @click="openDeleteEvent(evt)">Delete</button>
                         </div>
                     </div>
                 </div>
@@ -414,6 +436,7 @@ function formatTime(t: string | null) {
                                 <td class="px-4 py-3 text-right space-x-2">
                                     <router-link :to="{ name: 'admin-event-detail', params: { id: evt.id } }" class="text-navy hover:text-navy-600 text-sm font-medium">View</router-link>
                                     <button class="text-gray-500 hover:text-navy text-sm font-medium" @click="openEditEvent(evt)">Edit</button>
+                                    <button class="text-red-400 hover:text-red-600 text-sm font-medium" @click="openDeleteEvent(evt)">Delete</button>
                                 </td>
                             </tr>
                         </tbody>
@@ -665,6 +688,46 @@ function formatTime(t: string | null) {
                     </div>
                 </div>
             </Transition>
+        </Teleport>
+        <!-- ==================== DELETE CONFIRMATION MODAL ==================== -->
+        <Teleport to="body">
+            <div
+                v-if="showDeleteModal"
+                class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+                @click.self="showDeleteModal = false"
+            >
+                <div class="bg-white rounded-lg shadow-xl w-full max-w-sm p-6">
+                    <div class="flex items-center gap-3 mb-4">
+                        <div class="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
+                            <svg class="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                            </svg>
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-heading font-bold text-gray-900">Delete Event</h3>
+                            <p class="text-sm text-gray-500">This action cannot be undone.</p>
+                        </div>
+                    </div>
+                    <p class="text-sm text-gray-600 mb-5">
+                        Are you sure you want to delete <strong>{{ deleteTarget?.event_title }}</strong>? All associated attendance logs may be affected.
+                    </p>
+                    <div class="flex justify-end gap-3">
+                        <button
+                            class="px-4 py-2 border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50"
+                            @click="showDeleteModal = false"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            :disabled="deleting"
+                            class="px-4 py-2 bg-red-600 text-white text-sm font-semibold rounded-lg hover:bg-red-700 disabled:opacity-50"
+                            @click="handleDeleteEvent"
+                        >
+                            {{ deleting ? 'Deleting...' : 'Delete' }}
+                        </button>
+                    </div>
+                </div>
+            </div>
         </Teleport>
     </div>
 </template>

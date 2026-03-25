@@ -37,7 +37,7 @@ const navGroups: NavGroup[] = [
     {
         title: 'Overview',
         items: [
-            { label: 'Dashboard', to: { name: 'member-dashboard' }, iconKey: 'dashboard' },
+            { label: 'Community Hub', to: { name: 'member-dashboard' }, iconKey: 'dashboard' },
             { label: 'Announcements', to: { name: 'member-announcements' }, iconKey: 'announcements' },
         ],
     },

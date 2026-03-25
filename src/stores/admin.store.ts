@@ -134,6 +134,18 @@ export const useAdminStore = defineStore('admin', () => {
         return data ?? []
     }
 
+    async function deleteMember(profile: MembersProfile) {
+        // Delete profile record (cascade or manual cleanup)
+        const { error: err } = await supabase
+            .from('tbl_members_profile')
+            .delete()
+            .eq('id', profile.id)
+
+        if (err) return { success: false, error: err.message }
+        await fetchMembers()
+        return { success: true }
+    }
+
     return {
         members,
         users,
@@ -145,6 +157,7 @@ export const useAdminStore = defineStore('admin', () => {
         fetchUsers,
         approveMember,
         rejectMember,
+        deleteMember,
         fetchMemberById,
         fetchMemberAttendance,
         fetchMemberMinistries,

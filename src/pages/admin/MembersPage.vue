@@ -18,6 +18,8 @@ const lastAttendance = ref<Map<string, string>>(new Map())
 const rejectReason = ref('')
 const rejectTarget = ref<MembersProfile | null>(null)
 const showRejectModal = ref(false)
+const deleteTarget = ref<MembersProfile | null>(null)
+const showDeleteModal = ref(false)
 const actionLoading = ref<number | null>(null)
 const message = ref<{ type: 'success' | 'error'; text: string } | null>(null)
 
@@ -129,6 +131,26 @@ function exportToExcel() {
 
 function viewMember(m: MembersProfile) {
     router.push({ name: 'admin-member-detail', params: { id: m.user_id } })
+}
+
+function openDelete(member: MembersProfile) {
+    deleteTarget.value = member
+    showDeleteModal.value = true
+}
+
+async function handleDelete() {
+    if (!deleteTarget.value) return
+    actionLoading.value = deleteTarget.value.id
+    message.value = null
+    const result = await admin.deleteMember(deleteTarget.value)
+    if (result.success) {
+        message.value = { type: 'success', text: `${deleteTarget.value.first_name} ${deleteTarget.value.last_name} deleted.` }
+    } else {
+        message.value = { type: 'error', text: result.error ?? 'Failed to delete.' }
+    }
+    showDeleteModal.value = false
+    deleteTarget.value = null
+    actionLoading.value = null
 }
 
 function formatDate(d: string | null) {
@@ -271,13 +293,20 @@ function formatDate(d: string | null) {
                                         Reject
                                     </button>
                                 </template>
-                                <button
-                                    v-else
-                                    class="text-navy hover:text-navy-600 text-sm font-medium"
-                                    @click="viewMember(m)"
-                                >
-                                    View
-                                </button>
+                                <template v-else>
+                                    <button
+                                        class="text-navy hover:text-navy-600 text-sm font-medium mr-3"
+                                        @click="viewMember(m)"
+                                    >
+                                        View
+                                    </button>
+                                    <button
+                                        class="text-red-400 hover:text-red-600 text-sm font-medium"
+                                        @click="openDelete(m)"
+                                    >
+                                        Delete
+                                    </button>
+                                </template>
                             </td>
                         </tr>
                     </tbody>
@@ -315,6 +344,46 @@ function formatDate(d: string | null) {
                             @click="handleReject"
                         >
                             Reject
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </Teleport>
+        <!-- Delete Modal -->
+        <Teleport to="body">
+            <div
+                v-if="showDeleteModal"
+                class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+                @click.self="showDeleteModal = false"
+            >
+                <div class="bg-white rounded-lg shadow-xl w-full max-w-sm p-6">
+                    <div class="flex items-center gap-3 mb-4">
+                        <div class="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
+                            <svg class="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                            </svg>
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-heading font-bold text-gray-900">Delete Member Profile</h3>
+                            <p class="text-sm text-gray-500">This removes the duplicate profile.</p>
+                        </div>
+                    </div>
+                    <p class="text-sm text-gray-600 mb-5">
+                        Are you sure you want to delete <strong>{{ deleteTarget?.first_name }} {{ deleteTarget?.last_name }}</strong>'s profile? This action cannot be undone.
+                    </p>
+                    <div class="flex justify-end gap-3">
+                        <button
+                            class="px-4 py-2 border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50"
+                            @click="showDeleteModal = false"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            :disabled="actionLoading === deleteTarget?.id"
+                            class="px-4 py-2 bg-red-600 text-white text-sm font-semibold rounded-lg hover:bg-red-700 disabled:opacity-50"
+                            @click="handleDelete"
+                        >
+                            {{ actionLoading === deleteTarget?.id ? 'Deleting...' : 'Delete' }}
                         </button>
                     </div>
                 </div>

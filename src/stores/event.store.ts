@@ -69,5 +69,12 @@ export const useEventStore = defineStore('event', () => {
         return updateEvent(event.id, { is_active: !event.is_active })
     }
 
-    return { events, loading, error, fetchEvents, createEvent, updateEvent, toggleActive }
+    async function deleteEvent(id: number) {
+        const { error: err } = await supabase.from('tbl_events').delete().eq('id', id)
+        if (err) return { success: false, error: err.message }
+        await fetchEvents()
+        return { success: true }
+    }
+
+    return { events, loading, error, fetchEvents, createEvent, updateEvent, toggleActive, deleteEvent }
 })

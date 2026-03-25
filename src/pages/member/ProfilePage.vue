@@ -45,6 +45,7 @@ const form = ref({
     ext_name: '',
     email: '',
     birth_date: '',
+    phone_number: '',
     satellite_church_id: null as number | null,
 })
 
@@ -75,6 +76,7 @@ function populateForm() {
         ext_name: member.profile.ext_name ?? '',
         email: member.profile.email ?? '',
         birth_date: member.profile.birth_date ?? '',
+        phone_number: (member.profile as any).phone_number ?? '',
         satellite_church_id: member.profile.satellite_church_id,
     }
 }
@@ -201,6 +203,7 @@ async function handleSave() {
         last_name: form.value.last_name || null,
         ext_name: form.value.ext_name || null,
         birth_date: form.value.birth_date || null,
+        phone_number: form.value.phone_number || null,
         satellite_church_id: form.value.satellite_church_id,
     })
 
@@ -366,6 +369,20 @@ const birthdayDisplay = computed(() => {
     if (!member.profile?.birth_date) return null
     return new Date(member.profile.birth_date + 'T00:00:00').toLocaleDateString('en', { month: 'long', day: 'numeric' })
 })
+
+// Age based on birthday
+const age = computed(() => {
+    if (!member.profile?.birth_date) return null
+    const bday = new Date(member.profile.birth_date + 'T00:00:00')
+    const today = new Date()
+    let a = today.getFullYear() - bday.getFullYear()
+    const monthDiff = today.getMonth() - bday.getMonth()
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < bday.getDate())) a--
+    return a
+})
+
+// Phone number
+const phoneNumber = computed(() => (member.profile as any)?.phone_number ?? null)
 
 // Activity feed — merge attendance logs + program enrollments, sorted by date
 interface ActivityItem {
@@ -640,7 +657,16 @@ function formatActivityDate(d: string) {
                                 </svg>
                                 <div>
                                     <p class="text-[10px] text-gray-400 uppercase tracking-wider leading-none mb-0.5">Birthday</p>
-                                    <p class="text-sm text-gray-700">{{ birthdayDisplay }}</p>
+                                    <p class="text-sm text-gray-700">{{ birthdayDisplay }} <span v-if="age !== null" class="text-gray-400">({{ age }} yrs old)</span></p>
+                                </div>
+                            </div>
+                            <div v-if="phoneNumber" class="flex items-start gap-3">
+                                <svg class="w-4.5 h-4.5 text-gray-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z" />
+                                </svg>
+                                <div>
+                                    <p class="text-[10px] text-gray-400 uppercase tracking-wider leading-none mb-0.5">Phone</p>
+                                    <p class="text-sm text-gray-700">{{ phoneNumber }}</p>
                                 </div>
                             </div>
                             <div v-if="churchName" class="flex items-start gap-3">
@@ -699,6 +725,10 @@ function formatActivityDate(d: string) {
                             <div>
                                 <label class="block text-xs font-medium text-gray-500 mb-1">Birth Date</label>
                                 <input v-model="form.birth_date" type="date" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-navy/30 focus:border-navy" />
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-500 mb-1">Phone Number</label>
+                                <input v-model="form.phone_number" type="tel" placeholder="e.g. +63 912 345 6789" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-navy/30 focus:border-navy" />
                             </div>
                             <div>
                                 <label class="block text-xs font-medium text-gray-500 mb-1">Satellite Church</label>
