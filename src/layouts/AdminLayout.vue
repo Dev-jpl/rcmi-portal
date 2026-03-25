@@ -137,7 +137,7 @@ const navGroups = computed<NavGroup[]>(() => {
         // Ministry view — only leadership-assigned items
         const items: NavItem[] = []
         if (auth.isPastor) {
-            items.push({ label: 'My Team', to: { name: 'admin-my-team' }, iconKey: 'myteam' })
+            items.push({ label: 'My District', to: { name: 'admin-my-team' }, iconKey: 'myteam' })
         }
         if (auth.isNetworkLeader) {
             items.push({ label: 'My Network', to: { name: 'admin-my-network' }, iconKey: 'network' })
@@ -191,43 +191,44 @@ async function handleLogout() {
                 </div>
                 <div class="leading-tight">
                     <span class="font-heading font-bold text-[15px] block">{{ sidebarTitle }}</span>
-                    <span class="text-[10px] text-white/30 font-medium uppercase tracking-widest">{{ sidebarSubtitle }}</span>
+                    <span class="text-[10px] text-white/30 font-medium uppercase tracking-widest">{{ sidebarSubtitle
+                    }}</span>
                 </div>
             </div>
 
             <!-- View Switcher -->
             <div class="px-4 pt-4 pb-2 relative">
-                <button
-                    @click="viewDropdownOpen = !viewDropdownOpen"
-                    class="flex items-center gap-3 w-full px-3 py-2.5 bg-white/8 border border-white/10 rounded-lg text-sm text-white/90 font-medium cursor-pointer hover:bg-white/12 focus:outline-none focus:ring-2 focus:ring-gold/30 transition-all"
-                >
-                    <svg class="w-4.5 h-4.5 text-white/50 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" v-html="viewIcons[currentView]" />
+                <button @click="viewDropdownOpen = !viewDropdownOpen"
+                    class="flex items-center gap-3 w-full px-3 py-2.5 bg-white/8 border border-white/10 rounded-lg text-sm text-white/90 font-medium cursor-pointer hover:bg-white/12 focus:outline-none focus:ring-2 focus:ring-gold/30 transition-all">
+                    <svg class="w-4.5 h-4.5 text-white/50 shrink-0" fill="none" stroke="currentColor"
+                        viewBox="0 0 24 24" v-html="viewIcons[currentView]" />
                     <span class="flex-1 text-left">{{ viewLabels[currentView] }}</span>
-                    <svg class="w-3.5 h-3.5 text-white/30 shrink-0 transition-transform duration-200" :class="viewDropdownOpen ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                    <svg class="w-3.5 h-3.5 text-white/30 shrink-0 transition-transform duration-200"
+                        :class="viewDropdownOpen ? 'rotate-180' : ''" fill="none" stroke="currentColor"
+                        viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
                     </svg>
                 </button>
                 <!-- Dropdown -->
-                <Transition
-                    enter-active-class="transition duration-150 ease-out"
+                <Transition enter-active-class="transition duration-150 ease-out"
                     enter-from-class="opacity-0 -translate-y-1 scale-95"
                     enter-to-class="opacity-100 translate-y-0 scale-100"
                     leave-active-class="transition duration-100 ease-in"
                     leave-from-class="opacity-100 translate-y-0 scale-100"
-                    leave-to-class="opacity-0 -translate-y-1 scale-95"
-                >
-                    <div v-if="viewDropdownOpen" class="absolute left-4 right-4 mt-1.5 bg-[#0d1a3a] rounded-lg border border-white/10 shadow-xl shadow-black/30 overflow-hidden z-10">
-                        <button
-                            v-for="opt in viewOptions"
-                            :key="opt"
-                            @click="selectView(opt)"
+                    leave-to-class="opacity-0 -translate-y-1 scale-95">
+                    <div v-if="viewDropdownOpen"
+                        class="absolute left-4 right-4 mt-1.5 bg-[#0d1a3a] rounded-lg border border-white/10 shadow-xl shadow-black/30 overflow-hidden z-10">
+                        <button v-for="opt in viewOptions" :key="opt" @click="selectView(opt)"
                             class="flex items-center gap-3 w-full px-3 py-2.5 text-sm font-medium transition-colors"
-                            :class="opt === currentView ? 'text-gold bg-white/8' : 'text-white/60 hover:text-white hover:bg-white/6'"
-                        >
-                            <svg class="w-4.5 h-4.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" v-html="viewIcons[opt]" />
+                            :class="opt === currentView ? 'text-gold bg-white/8' : 'text-white/60 hover:text-white hover:bg-white/6'">
+                            <svg class="w-4.5 h-4.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                                v-html="viewIcons[opt]" />
                             {{ viewLabels[opt] }}
-                            <svg v-if="opt === currentView" class="w-3.5 h-3.5 ml-auto text-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.5 12.75l6 6 9-13.5" />
+                            <svg v-if="opt === currentView" class="w-3.5 h-3.5 ml-auto text-gold" fill="none"
+                                stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M4.5 12.75l6 6 9-13.5" />
                             </svg>
                         </button>
                     </div>
@@ -319,10 +320,14 @@ async function handleLogout() {
                     </svg>
                 </button>
                 <div class="flex-1" />
-                <button @click="showQr = true" class="p-2 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-navy transition-colors" title="My QR Code">
+                <button @click="showQr = true"
+                    class="p-2 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-navy transition-colors"
+                    title="My QR Code">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 013.75 9.375v-4.5zM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5zM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5z" />
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M6.75 6.75h.75v.75h-.75v-.75zM6.75 16.5h.75v.75h-.75v-.75zM16.5 6.75h.75v.75h-.75v-.75zM13.5 13.5h.75v.75h-.75v-.75zM13.5 19.5h.75v.75h-.75v-.75zM19.5 13.5h.75v.75h-.75v-.75zM19.5 19.5h.75v.75h-.75v-.75zM16.5 16.5h.75v.75h-.75v-.75z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                            d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 013.75 9.375v-4.5zM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5zM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                            d="M6.75 6.75h.75v.75h-.75v-.75zM6.75 16.5h.75v.75h-.75v-.75zM16.5 6.75h.75v.75h-.75v-.75zM13.5 13.5h.75v.75h-.75v-.75zM13.5 19.5h.75v.75h-.75v-.75zM19.5 13.5h.75v.75h-.75v-.75zM19.5 19.5h.75v.75h-.75v-.75zM16.5 16.5h.75v.75h-.75v-.75z" />
                     </svg>
                 </button>
                 <NotificationBell />
