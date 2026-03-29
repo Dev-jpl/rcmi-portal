@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/auth.store'
 import { useAdminStore } from '@/stores/admin.store'
 import { useQRScanner } from '@/composables/useQRScanner'
+import QRCode from 'qrcode'
 import type { Tables } from '@/types/database.types'
 
 type Event = Tables<'tbl_events'>
@@ -42,6 +43,26 @@ const manualSaving = ref(false)
 const attendanceMessage = ref<{ type: 'success' | 'error'; text: string } | null>(null)
 const { scannedToken, scanning, error: scanError, start: startScanner, stop: stopScanner, reset: resetScanner } = useQRScanner('event-qr-reader')
 const qrProcessing = ref(false)
+
+// Event QR
+const eventQrUrl = ref<string | null>(null)
+const showEventQr = ref(false)
+
+async function generateEventQr() {
+    if (!event.value) return
+    showEventQr.value = !showEventQr.value
+    if (!showEventQr.value) return
+    if (eventQrUrl.value) return // already generated
+    try {
+        eventQrUrl.value = await QRCode.toDataURL(`event:${event.value.id}`, {
+            width: 400,
+            margin: 2,
+            color: { dark: '#091f55', light: '#ffffff' },
+        })
+    } catch {
+        eventQrUrl.value = null
+    }
+}
 
 onMounted(async () => {
     await Promise.all([fetchEvent(), fetchRsvps(), fetchAttendance(), fetchPosts(), admin.fetchMembers()])
@@ -631,6 +652,36 @@ function getInitials(first: string, last: string) {
                             </svg>
                             QR Scanner
                         </button>
+                    </div>
+
+                    <!-- Event QR Code -->
+                    <div class="bg-white rounded-lg border border-gray-200 p-6">
+                        <div class="flex items-center justify-between mb-3">
+                            <h3 class="font-heading font-semibold text-navy">Event QR Code</h3>
+                            <button
+                                @click="generateEventQr"
+                                class="text-xs text-navy font-medium hover:underline"
+                            >
+                                {{ showEventQr ? 'Hide' : 'Show' }}
+                            </button>
+                        </div>
+                        <p class="text-xs text-gray-400 mb-4">Members can scan this QR to check in to this event</p>
+
+                        <template v-if="showEventQr">
+                            <div v-if="!eventQrUrl" class="w-full aspect-square bg-gray-100 rounded-lg animate-pulse" />
+                            <div v-else class="space-y-3">
+                                <img :src="eventQrUrl" alt="Event QR" class="w-full aspect-square rounded-lg" />
+                                <button
+                                    @click="(() => { const a = document.createElement('a'); a.href = eventQrUrl!; a.download = `event-qr-${event?.id}.png`; a.click() })()"
+                                    class="flex items-center justify-center gap-1.5 w-full py-2 bg-navy text-white text-sm font-semibold rounded-lg hover:bg-navy-700 transition-colors"
+                                >
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                                    </svg>
+                                    Download QR
+                                </button>
+                            </div>
+                        </template>
                     </div>
 
                     <!-- Summary Card -->

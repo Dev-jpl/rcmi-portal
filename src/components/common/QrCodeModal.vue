@@ -37,10 +37,8 @@ const allEventOptions = computed(() => {
     return [...real, ...defaults]
 })
 
-const canStartScan = computed(() => {
-    if (scanLogType.value === 'event') return !!scanEventId.value
-    return !!scanProgramId.value
-})
+// Always allow scanning — event QR codes work without pre-selection
+const canStartScan = computed(() => true)
 
 let scanner: Html5Qrcode | null = null
 let dataLoaded = false
@@ -125,7 +123,14 @@ async function onScanSuccess(decodedText: string) {
     await stopScanner()
     scanResult.value = decodedText
 
-    // Look up member by qr_token
+    // Check if this is an Event QR code (format: "event:<id>")
+    const eventQrMatch = decodedText.match(/^event:(\d+)$/)
+    if (eventQrMatch) {
+        await handleEventQrSelfCheckin(parseInt(eventQrMatch[1]))
+        return
+    }
+
+    // Otherwise, it's a member QR token — look up member
     const { data: profile } = await supabase
         .from('tbl_members_profile')
         .select('user_id, first_name, last_name')
@@ -134,6 +139,16 @@ async function onScanSuccess(decodedText: string) {
 
     if (!profile) {
         scanError.value = 'Member not found for this QR code'
+        return
+    }
+
+    // For member QR, require event/program selection
+    if (scanLogType.value === 'event' && !scanEventId.value) {
+        scanError.value = 'Please select an event first before scanning a member QR'
+        return
+    }
+    if (scanLogType.value === 'program' && !scanProgramId.value) {
+        scanError.value = 'Please select a program first before scanning a member QR'
         return
     }
 
@@ -174,6 +189,55 @@ async function onScanSuccess(decodedText: string) {
         scanError.value = error.message
     } else {
         scanSuccess.value = { name: memberName, title: title ?? '—' }
+    }
+}
+
+// Self check-in when scanning an Event QR code
+async function handleEventQrSelfCheckin(eventId: number) {
+    if (!auth.session?.user) {
+        scanError.value = 'You must be logged in to check in'
+        return
+    }
+
+    // Look up the event title
+    const { data: evt } = await supabase
+        .from('tbl_events')
+        .select('id, event_title')
+        .eq('id', eventId)
+        .maybeSingle()
+
+    if (!evt) {
+        scanError.value = 'Event not found'
+        return
+    }
+
+    const userName = `${auth.user?.first_name ?? ''} ${auth.user?.last_name ?? ''}`.trim()
+
+    const payload: Record<string, unknown> = {
+        user_id: auth.session.user.id,
+        event_id: evt.id,
+        event_title: evt.event_title,
+        input_method: 'self',
+        log_type: 'event',
+        log_date: new Date().toISOString().split('T')[0],
+        logged_at: new Date().toISOString(),
+        logged_by: auth.session.user.id,
+        logged_by_name: userName,
+        logged_location_id: auth.profile?.satellite_church_id ?? null,
+        logged_location_name: auth.profile?.satellite_church_name ?? null,
+        program_id: null,
+    }
+
+    const { error } = await supabase.from('tbl_attendance_logs').insert(payload)
+
+    if (error) {
+        if (error.message.includes('unique') || error.message.includes('duplicate')) {
+            scanError.value = 'You have already checked in to this event today'
+        } else {
+            scanError.value = error.message
+        }
+    } else {
+        scanSuccess.value = { name: userName, title: evt.event_title }
     }
 }
 
@@ -323,6 +387,10 @@ onBeforeUnmount(() => { stopScanner() })
                                         </option>
                                     </select>
                                 </div>
+
+                                <p class="text-[11px] text-gray-400 bg-gray-50 rounded-lg px-3 py-2">
+                                    Scanning an <strong>Event QR</strong>? Just start the camera — no selection needed. Your attendance will be logged automatically.
+                                </p>
 
                                 <!-- Scanner -->
                                 <div id="qr-reader" class="w-full aspect-square mx-auto rounded-lg overflow-hidden bg-gray-900" />

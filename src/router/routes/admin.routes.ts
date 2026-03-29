@@ -170,6 +170,23 @@ export const adminRoutes: RouteRecordRaw[] = [
                 meta: { roles: ['super_admin', 'admin', 'pastoral', 'network_leader', 'lpath_leader'] }
             },
             {
+                path: 'scripture-plans',
+                meta: { roles: ['super_admin', 'admin'] },
+                children: [
+                    {
+                        path: '',
+                        name: 'admin-scripture-plans',
+                        component: () => import('@/pages/admin/ScripturePlansPage.vue')
+                    },
+                    {
+                        path: ':id',
+                        name: 'admin-scripture-plan-detail',
+                        component: () => import('@/pages/admin/ScripturePlanDetailPage.vue'),
+                        props: true
+                    }
+                ]
+            },
+            {
                 path: 'audit-log',
                 name: 'admin-audit-log',
                 component: () => import('@/pages/admin/AuditLogPage.vue'),

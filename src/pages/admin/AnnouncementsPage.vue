@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { supabase } from '@/lib/supabase'
 import { useAnnouncementStore, type Announcement } from '@/stores/announcement.store'
 
 const store = useAnnouncementStore()
@@ -9,17 +10,60 @@ const saving = ref(false)
 const error = ref<string | null>(null)
 
 const form = ref({ title: '', content: '', is_pinned: false })
+const photoFile = ref<File | null>(null)
+const photoPreview = ref<string | null>(null)
+const existingPhotoUrl = ref<string | null>(null)
+const removePhoto = ref(false)
 
 function openAdd() {
     editing.value = null
     form.value = { title: '', content: '', is_pinned: false }
+    photoFile.value = null
+    photoPreview.value = null
+    existingPhotoUrl.value = null
+    removePhoto.value = false
     modalOpen.value = true
 }
 
 function openEdit(a: Announcement) {
     editing.value = a
     form.value = { title: a.title, content: a.content, is_pinned: a.is_pinned }
+    photoFile.value = null
+    photoPreview.value = null
+    existingPhotoUrl.value = a.photo_url ?? null
+    removePhoto.value = false
     modalOpen.value = true
+}
+
+function handlePhotoSelect(e: Event) {
+    const file = (e.target as HTMLInputElement).files?.[0]
+    if (!file) return
+    photoFile.value = file
+    photoPreview.value = URL.createObjectURL(file)
+    removePhoto.value = false
+}
+
+function clearPhoto() {
+    photoFile.value = null
+    photoPreview.value = null
+    removePhoto.value = true
+}
+
+async function uploadPhoto(file: File): Promise<string | null> {
+    const ext = file.name.split('.').pop()
+    const path = `announcements/${Date.now()}.${ext}`
+
+    const { error: uploadErr } = await supabase.storage
+        .from('avatars')
+        .upload(path, file, { upsert: true })
+
+    if (uploadErr) {
+        error.value = uploadErr.message
+        return null
+    }
+
+    const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path)
+    return urlData.publicUrl
 }
 
 async function handleSave() {
@@ -27,11 +71,19 @@ async function handleSave() {
     saving.value = true
     error.value = null
 
+    let photoUrl: string | null = existingPhotoUrl.value
+    if (photoFile.value) {
+        photoUrl = await uploadPhoto(photoFile.value)
+        if (error.value) { saving.value = false; return }
+    } else if (removePhoto.value) {
+        photoUrl = null
+    }
+
     let result
     if (editing.value) {
-        result = await store.updateAnnouncement(editing.value.id, form.value)
+        result = await store.updateAnnouncement(editing.value.id, { ...form.value, photo_url: photoUrl })
     } else {
-        result = await store.createAnnouncement(form.value.title, form.value.content, form.value.is_pinned)
+        result = await store.createAnnouncement(form.value.title, form.value.content, form.value.is_pinned, photoUrl)
     }
 
     if (result.success) {
@@ -84,6 +136,7 @@ onMounted(() => store.fetchAnnouncements())
                 class="bg-white rounded-lg border border-gray-200 p-4 flex items-start gap-4"
                 :class="{ 'border-gold': a.is_pinned }"
             >
+                <img v-if="a.photo_url" :src="a.photo_url" class="w-16 h-16 rounded-lg object-cover shrink-0" />
                 <div class="flex-1 min-w-0">
                     <div class="flex items-center gap-2 mb-1">
                         <span v-if="a.is_pinned" class="text-[10px] bg-gold/20 text-gold-700 px-1.5 py-0.5 rounded-full font-medium">
@@ -133,6 +186,25 @@ onMounted(() => store.fetchAnnouncements())
                                 rows="4"
                                 required
                                 class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-navy/30 resize-none"
+                            />
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Photo (optional)</label>
+                            <div v-if="photoPreview || (existingPhotoUrl && !removePhoto)" class="mb-2 relative inline-block">
+                                <img :src="photoPreview ?? existingPhotoUrl!" class="w-full max-h-48 rounded-lg object-cover" />
+                                <button
+                                    type="button"
+                                    class="absolute top-1 right-1 w-6 h-6 bg-black/60 text-white rounded-full text-xs flex items-center justify-center hover:bg-black/80"
+                                    @click="clearPhoto"
+                                >
+                                    &times;
+                                </button>
+                            </div>
+                            <input
+                                type="file"
+                                accept="image/*"
+                                class="w-full text-sm text-gray-500 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-navy/10 file:text-navy hover:file:bg-navy/20"
+                                @change="handlePhotoSelect"
                             />
                         </div>
                         <label class="flex items-center gap-2 cursor-pointer">

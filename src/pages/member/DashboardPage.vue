@@ -6,6 +6,8 @@ import { useAnnouncementStore } from '@/stores/announcement.store'
 import { useRsvp } from '@/composables/useRsvp'
 import QrCodeModal from '@/components/common/QrCodeModal.vue'
 import { supabase } from '@/lib/supabase'
+import { useScripturePlanStore, type ScripturePlanEntry } from '@/stores/scripture-plan.store'
+import { getBookByName } from '@/lib/bible-books'
 import type { Tables } from '@/types/database.types'
 
 const auth = useAuthStore()
@@ -13,9 +15,14 @@ const member = useMemberStore()
 const announcementStore = useAnnouncementStore()
 const { rsvps, rsvpCounts, fetchRsvps, setRsvp } = useRsvp()
 
+const scripturePlanStore = useScripturePlanStore()
 const showQr = ref(false)
 const upcomingEvents = ref<Tables<'tbl_events'>[]>([])
 const birthdays = ref<{ name: string; birthday: string; daysUntil: number }[]>([])
+const todayReading = ref<ScripturePlanEntry | null>(null)
+const scriptureVerses = ref<{ verse: number; text: string }[]>([])
+const scriptureExpanded = ref(false)
+const scriptureLoading = ref(false)
 const pageLoading = ref(true)
 
 // Feed data
@@ -48,6 +55,7 @@ onMounted(async () => {
         fetchUpcomingBirthdays(),
         announcementStore.fetchAnnouncements(),
         fetchCommunityFeed(),
+        fetchTodayReading(),
     ])
     pageLoading.value = false
 })
@@ -173,6 +181,49 @@ async function togglePray(id: string) {
     }
     const prayerIds = feedItems.value.filter(i => i.type === 'prayer').map(i => i.id)
     await fetchPrayerCounts(prayerIds)
+}
+
+async function fetchTodayReading() {
+    todayReading.value = await scripturePlanStore.fetchTodayReading()
+}
+
+async function loadScriptureText() {
+    if (!todayReading.value || scriptureVerses.value.length) {
+        scriptureExpanded.value = !scriptureExpanded.value
+        return
+    }
+    scriptureLoading.value = true
+    scriptureExpanded.value = true
+
+    const book = getBookByName(todayReading.value.book_name)
+    if (!book) { scriptureLoading.value = false; return }
+
+    try {
+        // Fetch all chapters in the range
+        const allVerses: { verse: number; text: string }[] = []
+        for (let ch = todayReading.value.chapter_start; ch <= todayReading.value.chapter_end; ch++) {
+            const res = await fetch(`https://bolls.life/get-chapter/KJV/${book.code}/${ch}/`)
+            if (res.ok) {
+                const data = await res.json()
+                const chapterLabel = todayReading.value.chapter_start !== todayReading.value.chapter_end
+                    ? `[Ch. ${ch}] ` : ''
+                for (const v of data) {
+                    allVerses.push({ verse: v.verse, text: `${chapterLabel}${v.verse}. ${v.text}` })
+                }
+            }
+        }
+        scriptureVerses.value = allVerses
+    } catch {
+        scriptureVerses.value = [{ verse: 0, text: 'Could not load scripture text. Please try again later.' }]
+    }
+    scriptureLoading.value = false
+}
+
+function todayReadingRef(): string {
+    if (!todayReading.value) return ''
+    const r = todayReading.value
+    if (r.chapter_start === r.chapter_end) return `${r.book_name} ${r.chapter_start}`
+    return `${r.book_name} ${r.chapter_start}-${r.chapter_end}`
 }
 
 async function fetchUpcomingEvents() {
@@ -417,6 +468,38 @@ function getRsvpCount(eventId: number) {
 
                 <!-- Right column -->
                 <div class="space-y-6">
+                    <!-- Today's Scripture Reading -->
+                    <div v-if="todayReading" class="bg-gradient-to-br from-amber-50 to-orange-50 rounded-lg border border-amber-200/60 p-5 sm:p-6">
+                        <div class="flex items-center gap-2 mb-3">
+                            <svg class="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
+                            </svg>
+                            <h2 class="font-heading font-semibold text-amber-900 text-lg">Today's Reading</h2>
+                        </div>
+                        <p class="text-xl font-bold text-amber-800 mb-1">{{ todayReadingRef() }}</p>
+                        <p v-if="todayReading.notes" class="text-sm text-amber-700/80 mb-3 italic">{{ todayReading.notes }}</p>
+
+                        <button
+                            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+                            :class="scriptureExpanded ? 'bg-amber-200/60 text-amber-800' : 'bg-white/70 text-amber-700 hover:bg-white'"
+                            @click="loadScriptureText"
+                        >
+                            <svg v-if="scriptureLoading" class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                            </svg>
+                            <span v-else>{{ scriptureExpanded ? 'Hide' : 'Read' }} Scripture</span>
+                        </button>
+
+                        <div v-if="scriptureExpanded && scriptureVerses.length" class="mt-3 bg-white/60 rounded-lg p-4 max-h-80 overflow-y-auto">
+                            <p
+                                v-for="v in scriptureVerses"
+                                :key="v.verse"
+                                class="text-sm text-gray-700 leading-relaxed mb-1"
+                            >{{ v.text }}</p>
+                        </div>
+                    </div>
+
                     <!-- Upcoming Events with RSVP -->
                     <div class="bg-white rounded-lg border border-gray-200 p-5 sm:p-6">
                         <div class="flex items-center justify-between mb-4">

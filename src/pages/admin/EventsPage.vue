@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/auth.store'
 import { useEventStore } from '@/stores/event.store'
+import QRCode from 'qrcode'
 import type { Tables, TablesInsert } from '@/types/database.types'
 
 type Event = Tables<'tbl_events'>
@@ -37,6 +38,12 @@ const form = ref(getEventDefaults())
 const deleteTarget = ref<Event | null>(null)
 const showDeleteModal = ref(false)
 const deleting = ref(false)
+
+// Event QR
+const showQrModal = ref(false)
+const qrTarget = ref<Event | null>(null)
+const qrDataUrl = ref<string | null>(null)
+const qrGenerating = ref(false)
 
 function getEventDefaults() {
     return {
@@ -158,6 +165,23 @@ async function handleToggle(event: Event) {
 function openDeleteEvent(event: Event) {
     deleteTarget.value = event
     showDeleteModal.value = true
+}
+
+async function openEventQr(event: Event) {
+    qrTarget.value = event
+    qrDataUrl.value = null
+    showQrModal.value = true
+    qrGenerating.value = true
+    try {
+        qrDataUrl.value = await QRCode.toDataURL(`event:${event.id}`, {
+            width: 400,
+            margin: 2,
+            color: { dark: '#091f55', light: '#ffffff' },
+        })
+    } catch {
+        qrDataUrl.value = null
+    }
+    qrGenerating.value = false
 }
 
 async function handleDeleteEvent() {
@@ -398,6 +422,8 @@ function formatTime(t: string | null) {
                             <span class="text-gray-200">&middot;</span>
                             <button class="text-xs text-gray-500 hover:text-navy font-medium" @click="openEditEvent(evt)">Edit</button>
                             <span class="text-gray-200">&middot;</span>
+                            <button class="text-xs text-violet-500 hover:text-violet-700 font-medium" @click="openEventQr(evt)">QR</button>
+                            <span class="text-gray-200">&middot;</span>
                             <button class="text-xs text-red-400 hover:text-red-600 font-medium" @click="openDeleteEvent(evt)">Delete</button>
                         </div>
                     </div>
@@ -436,6 +462,7 @@ function formatTime(t: string | null) {
                                 <td class="px-4 py-3 text-right space-x-2">
                                     <router-link :to="{ name: 'admin-event-detail', params: { id: evt.id } }" class="text-navy hover:text-navy-600 text-sm font-medium">View</router-link>
                                     <button class="text-gray-500 hover:text-navy text-sm font-medium" @click="openEditEvent(evt)">Edit</button>
+                                    <button class="text-violet-500 hover:text-violet-700 text-sm font-medium" @click="openEventQr(evt)">QR</button>
                                     <button class="text-red-400 hover:text-red-600 text-sm font-medium" @click="openDeleteEvent(evt)">Delete</button>
                                 </td>
                             </tr>
@@ -689,6 +716,55 @@ function formatTime(t: string | null) {
                 </div>
             </Transition>
         </Teleport>
+        <!-- ==================== EVENT QR MODAL ==================== -->
+        <Teleport to="body">
+            <div
+                v-if="showQrModal"
+                class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+                @click.self="showQrModal = false"
+            >
+                <div class="bg-white rounded-lg shadow-xl w-full max-w-sm p-6 text-center">
+                    <button
+                        @click="showQrModal = false"
+                        class="absolute top-3 right-3 p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+                    >
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+
+                    <h3 class="text-lg font-heading font-bold text-navy mb-1">Event QR Code</h3>
+                    <p class="text-sm text-gray-500 mb-4">{{ qrTarget?.event_title }}</p>
+
+                    <div v-if="qrGenerating" class="w-64 h-64 mx-auto bg-gray-100 rounded-lg animate-pulse" />
+                    <div v-else-if="qrDataUrl" class="flex justify-center mb-4">
+                        <img :src="qrDataUrl" alt="Event QR" class="w-64 h-64 rounded-lg" />
+                    </div>
+
+                    <p class="text-xs text-gray-400 mb-4">Members can scan this QR to check in to this event</p>
+
+                    <div class="flex justify-center gap-3">
+                        <button
+                            v-if="qrDataUrl"
+                            @click="(() => { const a = document.createElement('a'); a.href = qrDataUrl!; a.download = `event-qr-${qrTarget?.id}.png`; a.click() })()"
+                            class="inline-flex items-center gap-1.5 px-4 py-2 bg-navy text-white text-sm font-semibold rounded-lg hover:bg-navy-700 transition-colors"
+                        >
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                            </svg>
+                            Download
+                        </button>
+                        <button
+                            @click="showQrModal = false"
+                            class="px-4 py-2 border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50 transition-colors"
+                        >
+                            Close
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </Teleport>
+
         <!-- ==================== DELETE CONFIRMATION MODAL ==================== -->
         <Teleport to="body">
             <div

@@ -28,6 +28,7 @@ onMounted(() => store.fetchAnnouncements())
                 class="bg-white rounded-xl border border-gray-200 p-5"
                 :class="{ 'border-gold ring-1 ring-gold/30': a.is_pinned }"
             >
+                <img v-if="a.photo_url" :src="a.photo_url" class="w-full rounded-lg object-cover mb-3 max-h-64" />
                 <div class="flex items-start gap-2 mb-2">
                     <span v-if="a.is_pinned" class="text-xs bg-gold/20 text-gold-700 px-2 py-0.5 rounded-full font-medium shrink-0">
                         Pinned

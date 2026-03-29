@@ -7,6 +7,7 @@ export interface Announcement {
     id: string
     title: string
     content: string
+    photo_url: string | null
     author_id: string
     author_name: string
     is_pinned: boolean
@@ -30,7 +31,7 @@ export const useAnnouncementStore = defineStore('announcement', () => {
         loading.value = false
     }
 
-    async function createAnnouncement(title: string, content: string, isPinned = false) {
+    async function createAnnouncement(title: string, content: string, isPinned = false, photoUrl: string | null = null) {
         const auth = useAuthStore()
         if (!auth.session?.user) return { success: false, error: 'Not authenticated' }
 
@@ -42,6 +43,7 @@ export const useAnnouncementStore = defineStore('announcement', () => {
             author_id: auth.session.user.id,
             author_name: authorName,
             is_pinned: isPinned,
+            photo_url: photoUrl,
         })
 
         if (err) return { success: false, error: err.message }

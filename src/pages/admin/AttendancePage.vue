@@ -272,28 +272,21 @@ function formatTime(d: string | null) {
 
         <!-- Tabs -->
         <div class="inline-flex gap-0.5 bg-gray-100/80 rounded-md p-0.5 mb-6 flex-wrap">
-            <button
-                v-for="tab in [
-                    { key: 'event' as const, label: 'By Event' },
-                    { key: 'member' as const, label: 'By Member' },
-                    { key: 'manual' as const, label: 'Manual Check-In' },
-                    { key: 'qr' as const, label: 'QR Scanner' },
-                ]"
-                :key="tab.key"
-                class="px-2.5 py-1 text-[11px] font-medium rounded transition-all whitespace-nowrap"
+            <button v-for="tab in [
+                { key: 'event' as const, label: 'By Event' },
+                { key: 'member' as const, label: 'By Member' },
+                { key: 'manual' as const, label: 'Manual Check-In' },
+                { key: 'qr' as const, label: 'QR Scanner' },
+            ]" :key="tab.key" class="px-2.5 py-1 text-[11px] font-medium rounded transition-all whitespace-nowrap"
                 :class="activeTab === tab.key ? 'bg-white text-navy shadow-sm' : 'text-gray-400 hover:text-gray-600'"
-                @click="onTabChange(tab.key)"
-            >
+                @click="onTabChange(tab.key)">
                 {{ tab.label }}
             </button>
         </div>
 
         <!-- Message -->
-        <p
-            v-if="message"
-            class="text-sm rounded-lg px-4 py-2 mb-4"
-            :class="message.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'"
-        >
+        <p v-if="message" class="text-sm rounded-lg px-4 py-2 mb-4"
+            :class="message.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'">
             {{ message.text }}
         </p>
 
@@ -303,17 +296,11 @@ function formatTime(d: string | null) {
             <form @submit.prevent="handleManualCheckIn" class="space-y-4">
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Member</label>
-                    <select
-                        v-model="manualForm.user_id"
-                        required
-                        class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-navy/30"
-                    >
+                    <select v-model="manualForm.user_id" required
+                        class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-navy/30">
                         <option value="" disabled>Select member</option>
-                        <option
-                            v-for="m in admin.members.filter(m => m.status === 'approved')"
-                            :key="m.user_id"
-                            :value="m.user_id"
-                        >
+                        <option v-for="m in admin.members.filter(m => m.status === 'approved')" :key="m.user_id"
+                            :value="m.user_id">
                             {{ m.first_name }} {{ m.last_name }}
                         </option>
                     </select>
@@ -323,20 +310,14 @@ function formatTime(d: string | null) {
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Log For</label>
                     <div class="inline-flex gap-0.5 bg-gray-100/80 rounded-md p-0.5">
-                        <button
-                            type="button"
-                            class="px-3 py-1.5 text-xs font-medium rounded transition-all"
+                        <button type="button" class="px-3 py-1.5 text-xs font-medium rounded transition-all"
                             :class="manualLogType === 'event' ? 'bg-white text-navy shadow-sm' : 'text-gray-400 hover:text-gray-600'"
-                            @click="manualLogType = 'event'"
-                        >
+                            @click="manualLogType = 'event'">
                             Event
                         </button>
-                        <button
-                            type="button"
-                            class="px-3 py-1.5 text-xs font-medium rounded transition-all"
+                        <button type="button" class="px-3 py-1.5 text-xs font-medium rounded transition-all"
                             :class="manualLogType === 'program' ? 'bg-white text-navy shadow-sm' : 'text-gray-400 hover:text-gray-600'"
-                            @click="manualLogType = 'program'"
-                        >
+                            @click="manualLogType = 'program'">
                             Program
                         </button>
                     </div>
@@ -345,11 +326,8 @@ function formatTime(d: string | null) {
                 <!-- Event Select -->
                 <div v-if="manualLogType === 'event'">
                     <label class="block text-sm font-medium text-gray-700 mb-1">Event</label>
-                    <select
-                        v-model="manualForm.event_id"
-                        required
-                        class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-navy/30"
-                    >
+                    <select v-model="manualForm.event_id" required
+                        class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-navy/30">
                         <option :value="null" disabled>Select event</option>
                         <option v-for="opt in allEventOptions" :key="opt.id" :value="opt.id">
                             {{ opt.label }}
@@ -360,11 +338,8 @@ function formatTime(d: string | null) {
                 <!-- Program Select -->
                 <div v-else>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Program</label>
-                    <select
-                        v-model="manualForm.program_id"
-                        required
-                        class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-navy/30"
-                    >
+                    <select v-model="manualForm.program_id" required
+                        class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-navy/30">
                         <option :value="null" disabled>Select program</option>
                         <option v-for="p in programs" :key="p.id" :value="p.id">
                             {{ p.type }}
@@ -372,11 +347,8 @@ function formatTime(d: string | null) {
                     </select>
                 </div>
 
-                <button
-                    type="submit"
-                    :disabled="manualSaving"
-                    class="w-full py-2.5 bg-navy text-white font-semibold rounded-lg hover:bg-navy-700 disabled:opacity-50 transition-colors"
-                >
+                <button type="submit" :disabled="manualSaving"
+                    class="w-full py-2.5 bg-navy text-white font-semibold rounded-lg hover:bg-navy-700 disabled:opacity-50 transition-colors">
                     {{ manualSaving ? 'Checking in...' : 'Check In' }}
                 </button>
             </form>
@@ -391,20 +363,14 @@ function formatTime(d: string | null) {
                 <div class="mb-4">
                     <label class="block text-sm font-medium text-gray-700 mb-1">Log For</label>
                     <div class="inline-flex gap-0.5 bg-gray-100/80 rounded-md p-0.5">
-                        <button
-                            type="button"
-                            class="px-3 py-1.5 text-xs font-medium rounded transition-all"
+                        <button type="button" class="px-3 py-1.5 text-xs font-medium rounded transition-all"
                             :class="qrLogType === 'event' ? 'bg-white text-navy shadow-sm' : 'text-gray-400 hover:text-gray-600'"
-                            @click="qrLogType = 'event'"
-                        >
+                            @click="qrLogType = 'event'">
                             Event
                         </button>
-                        <button
-                            type="button"
-                            class="px-3 py-1.5 text-xs font-medium rounded transition-all"
+                        <button type="button" class="px-3 py-1.5 text-xs font-medium rounded transition-all"
                             :class="qrLogType === 'program' ? 'bg-white text-navy shadow-sm' : 'text-gray-400 hover:text-gray-600'"
-                            @click="qrLogType = 'program'"
-                        >
+                            @click="qrLogType = 'program'">
                             Program
                         </button>
                     </div>
@@ -413,11 +379,8 @@ function formatTime(d: string | null) {
                 <!-- Event Select -->
                 <div v-if="qrLogType === 'event'" class="mb-4">
                     <label class="block text-sm font-medium text-gray-700 mb-1">Event</label>
-                    <select
-                        v-model="qrEventId"
-                        required
-                        class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-navy/30"
-                    >
+                    <select v-model="qrEventId" required
+                        class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-navy/30">
                         <option :value="null" disabled>Select event first</option>
                         <option v-for="opt in allEventOptions" :key="opt.id" :value="opt.id">
                             {{ opt.label }}
@@ -428,11 +391,8 @@ function formatTime(d: string | null) {
                 <!-- Program Select -->
                 <div v-else class="mb-4">
                     <label class="block text-sm font-medium text-gray-700 mb-1">Program</label>
-                    <select
-                        v-model="qrProgramId"
-                        required
-                        class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-navy/30"
-                    >
+                    <select v-model="qrProgramId" required
+                        class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-navy/30">
                         <option :value="null" disabled>Select program first</option>
                         <option v-for="p in programs" :key="p.id" :value="p.id">
                             {{ p.type }}
@@ -443,19 +403,15 @@ function formatTime(d: string | null) {
                 <div id="qr-reader" class="w-full mb-4 rounded-lg overflow-hidden" />
 
                 <div class="flex gap-3">
-                    <button
-                        v-if="!scanning"
+                    <button v-if="!scanning"
                         :disabled="(qrLogType === 'event' && !qrEventId) || (qrLogType === 'program' && !qrProgramId)"
                         class="flex-1 py-2.5 bg-navy text-white font-semibold rounded-lg hover:bg-navy-700 disabled:opacity-50 transition-colors"
-                        @click="startScanner"
-                    >
+                        @click="startScanner">
                         Start Scanning
                     </button>
-                    <button
-                        v-else
+                    <button v-else
                         class="flex-1 py-2.5 bg-red-500 text-white font-semibold rounded-lg hover:bg-red-600 transition-colors"
-                        @click="stopScanner"
-                    >
+                        @click="stopScanner">
                         Stop
                     </button>
                 </div>
@@ -468,12 +424,8 @@ function formatTime(d: string | null) {
         <!-- Event / Member attendance logs -->
         <template v-else>
             <div class="mb-4">
-                <input
-                    v-model="search"
-                    type="text"
-                    placeholder="Search by event, program, name, or location..."
-                    class="w-full sm:w-80 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-navy/30 focus:border-navy"
-                />
+                <input v-model="search" type="text" placeholder="Search by event, program, name, or location..."
+                    class="w-full sm:w-80 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-navy/30 focus:border-navy" />
             </div>
 
             <div v-if="loading" class="space-y-3">
@@ -502,29 +454,27 @@ function formatTime(d: string | null) {
                                 <td class="px-4 py-3 text-gray-900">{{ formatDate(log.log_date) }}</td>
                                 <td class="px-4 py-3 font-medium text-gray-900">{{ getMemberName(log.user_id) }}</td>
                                 <td class="px-4 py-3">
-                                    <span
-                                        class="text-xs px-2 py-0.5 rounded-full font-medium"
-                                        :class="log.log_type === 'program' ? 'bg-purple-50 text-purple-700' : 'bg-blue-50 text-blue-700'"
-                                    >
+                                    <span class="text-xs px-2 py-0.5 rounded-full font-medium"
+                                        :class="log.log_type === 'program' ? 'bg-purple-50 text-purple-700' : 'bg-blue-50 text-blue-700'">
                                         {{ getLogTypeBadge(log) }}
                                     </span>
                                 </td>
                                 <td class="px-4 py-3 font-medium text-gray-900">{{ getLogTitle(log) }}</td>
-                                <td class="px-4 py-3 text-gray-500 hidden md:table-cell">{{ log.logged_by_name ?? '—' }}</td>
-                                <td class="px-4 py-3 text-gray-500 hidden md:table-cell">{{ log.logged_location_name ?? '—' }}</td>
+                                <td class="px-4 py-3 text-gray-500 hidden md:table-cell">{{ log.logged_by_name ?? '—' }}
+                                </td>
+                                <td class="px-4 py-3 text-gray-500 hidden md:table-cell">{{ log.logged_location_name ??
+                                    '—' }}</td>
                                 <td class="px-4 py-3">
-                                    <span
-                                        class="text-xs px-2 py-0.5 rounded-full font-medium"
-                                        :class="{
-                                            'bg-blue-100 text-blue-700': log.input_method === 'QR',
-                                            'bg-green-100 text-green-700': log.input_method === 'self',
-                                            'bg-gray-100 text-gray-600': log.input_method === 'manual',
-                                        }"
-                                    >
+                                    <span class="text-xs px-2 py-0.5 rounded-full font-medium" :class="{
+                                        'bg-blue-100 text-blue-700': log.input_method === 'QR',
+                                        'bg-green-100 text-green-700': log.input_method === 'self',
+                                        'bg-gray-100 text-gray-600': log.input_method === 'manual',
+                                    }">
                                         {{ log.input_method }}
                                     </span>
                                 </td>
-                                <td class="px-4 py-3 text-gray-400 text-xs hidden lg:table-cell">{{ formatTime(log.logged_at) }}</td>
+                                <td class="px-4 py-3 text-gray-400 text-xs hidden lg:table-cell">{{
+                                    formatTime(log.logged_at) }}</td>
                             </tr>
                         </tbody>
                     </table>
