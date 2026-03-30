@@ -38,6 +38,29 @@ interface MemberBadge {
 }
 const memberBadges = ref<MemberBadge[]>([])
 
+// Testimonials
+interface Testimonial {
+    id: string
+    profile_user_id: string
+    author_id: string
+    author_name: string
+    content: string
+    approval_status: string
+    created_at: string
+}
+const testimonials = ref<Testimonial[]>([])
+const testimonialFilter = ref<'pending' | 'approved' | 'all'>('all')
+const processingTestimonialId = ref<string | null>(null)
+
+const filteredTestimonials = computed(() => {
+    if (testimonialFilter.value === 'all') return testimonials.value
+    return testimonials.value.filter(t => t.approval_status === testimonialFilter.value)
+})
+
+const pendingTestimonialCount = computed(() =>
+    testimonials.value.filter(t => t.approval_status === 'pending').length
+)
+
 const form = ref({
     first_name: '',
     middle_name: '',
@@ -60,6 +83,7 @@ onMounted(async () => {
         fetchChurches(),
         fetchDevotionStreak(),
         fetchMemberBadges(),
+        fetchTestimonials(),
     ])
     populateForm()
     loading.value = false
@@ -463,6 +487,64 @@ function formatActivityDate(d: string) {
     if (diffDays < 7) return `${diffDays}d ago`
     return date.toLocaleDateString('en', { month: 'short', day: 'numeric' })
 }
+
+// Testimonials
+async function fetchTestimonials() {
+    if (!auth.session?.user) return
+    const { data } = await supabase
+        .from('tbl_testimonials')
+        .select('*')
+        .eq('profile_user_id', auth.session.user.id)
+        .order('created_at', { ascending: false })
+    testimonials.value = data ?? []
+}
+
+async function handleApproveTestimonial(id: string) {
+    processingTestimonialId.value = id
+    await supabase
+        .from('tbl_testimonials')
+        .update({ approval_status: 'approved' })
+        .eq('id', id)
+    const t = testimonials.value.find(t => t.id === id)
+    if (t) t.approval_status = 'approved'
+    processingTestimonialId.value = null
+}
+
+async function handleRejectTestimonial(id: string) {
+    processingTestimonialId.value = id
+    await supabase
+        .from('tbl_testimonials')
+        .update({ approval_status: 'rejected' })
+        .eq('id', id)
+    const t = testimonials.value.find(t => t.id === id)
+    if (t) t.approval_status = 'rejected'
+    processingTestimonialId.value = null
+}
+
+async function handleDeleteTestimonial(id: string) {
+    processingTestimonialId.value = id
+    await supabase
+        .from('tbl_testimonials')
+        .delete()
+        .eq('id', id)
+    testimonials.value = testimonials.value.filter(t => t.id !== id)
+    processingTestimonialId.value = null
+}
+
+function testimonialTimeAgo(dateStr: string) {
+    const date = new Date(dateStr)
+    const now = new Date()
+    const diffMs = now.getTime() - date.getTime()
+    const diffMins = Math.floor(diffMs / 60000)
+    const diffHours = Math.floor(diffMs / 3600000)
+    const diffDays = Math.floor(diffMs / 86400000)
+
+    if (diffMins < 1) return 'Just now'
+    if (diffMins < 60) return `${diffMins}m ago`
+    if (diffHours < 24) return `${diffHours}h ago`
+    if (diffDays < 7) return `${diffDays}d ago`
+    return date.toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric' })
+}
 </script>
 
 <template>
@@ -630,6 +712,89 @@ function formatActivityDate(d: string) {
                         <span>{{ badgeEmoji(badge.icon) }}</span>
                         <span>{{ badge.name }}</span>
                         <span class="opacity-60">{{ badge.count }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Testimonials Management -->
+            <div class="bg-white rounded-lg border border-gray-200 p-5 mb-6">
+                <div class="flex items-center justify-between mb-3">
+                    <h2 class="font-heading font-semibold text-navy text-base">Testimonials</h2>
+                    <span v-if="pendingTestimonialCount" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200">
+                        {{ pendingTestimonialCount }} pending
+                    </span>
+                </div>
+
+                <!-- Filter tabs -->
+                <div class="flex gap-1 mb-4 bg-gray-50 rounded-lg p-0.5">
+                    <button
+                        v-for="tab in (['all', 'pending', 'approved'] as const)"
+                        :key="tab"
+                        @click="testimonialFilter = tab"
+                        class="flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-colors capitalize"
+                        :class="testimonialFilter === tab ? 'bg-white text-navy shadow-sm' : 'text-gray-500 hover:text-gray-700'"
+                    >
+                        {{ tab }}
+                    </button>
+                </div>
+
+                <div v-if="!filteredTestimonials.length" class="text-sm text-gray-400 py-6 text-center">
+                    No {{ testimonialFilter === 'all' ? '' : testimonialFilter + ' ' }}testimonials yet.
+                </div>
+
+                <div v-else class="space-y-3">
+                    <div
+                        v-for="t in filteredTestimonials"
+                        :key="t.id"
+                        class="border rounded-lg p-3"
+                        :class="{
+                            'border-amber-200 bg-amber-50/30': t.approval_status === 'pending',
+                            'border-gray-200': t.approval_status === 'approved',
+                            'border-red-200 bg-red-50/30': t.approval_status === 'rejected',
+                        }"
+                    >
+                        <div class="flex items-start justify-between gap-2 mb-1.5">
+                            <div>
+                                <span class="text-sm font-medium text-gray-900">{{ t.author_name }}</span>
+                                <span class="text-xs text-gray-400 ml-2">{{ testimonialTimeAgo(t.created_at) }}</span>
+                            </div>
+                            <span
+                                class="shrink-0 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider"
+                                :class="{
+                                    'bg-amber-100 text-amber-700': t.approval_status === 'pending',
+                                    'bg-emerald-100 text-emerald-700': t.approval_status === 'approved',
+                                    'bg-red-100 text-red-700': t.approval_status === 'rejected',
+                                }"
+                            >
+                                {{ t.approval_status }}
+                            </span>
+                        </div>
+                        <p class="text-sm text-gray-700 mb-2">{{ t.content }}</p>
+                        <div class="flex items-center gap-2">
+                            <button
+                                v-if="t.approval_status !== 'approved'"
+                                @click="handleApproveTestimonial(t.id)"
+                                :disabled="processingTestimonialId === t.id"
+                                class="px-2.5 py-1 text-xs font-medium rounded-md bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-50 transition-colors"
+                            >
+                                Approve
+                            </button>
+                            <button
+                                v-if="t.approval_status !== 'rejected'"
+                                @click="handleRejectTestimonial(t.id)"
+                                :disabled="processingTestimonialId === t.id"
+                                class="px-2.5 py-1 text-xs font-medium rounded-md bg-amber-50 text-amber-700 hover:bg-amber-100 disabled:opacity-50 transition-colors"
+                            >
+                                Reject
+                            </button>
+                            <button
+                                @click="handleDeleteTestimonial(t.id)"
+                                :disabled="processingTestimonialId === t.id"
+                                class="px-2.5 py-1 text-xs font-medium rounded-md bg-red-50 text-red-700 hover:bg-red-100 disabled:opacity-50 transition-colors ml-auto"
+                            >
+                                Delete
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>

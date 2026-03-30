@@ -23,6 +23,22 @@ const devotionStreak = ref(0)
 
 const isOwnProfile = computed(() => auth.session?.user?.id === props.userId)
 
+// Testimonials
+interface Testimonial {
+    id: string
+    profile_user_id: string
+    author_id: string
+    author_name: string
+    content: string
+    approval_status: string
+    created_at: string
+}
+
+const testimonials = ref<Testimonial[]>([])
+const newTestimonial = ref('')
+const postingTestimonial = ref(false)
+const testimonialMessage = ref<{ type: 'success' | 'error'; text: string } | null>(null)
+
 onMounted(async () => {
     // Redirect to own profile page if viewing self
     if (isOwnProfile.value) {
@@ -36,6 +52,7 @@ onMounted(async () => {
         fetchAllBadges(),
         fetchStats(),
         fetchDevotionStreak(),
+        fetchTestimonials(),
     ])
     loading.value = false
 })
@@ -174,6 +191,57 @@ async function giveBadge(badgeId: number) {
 
     givingBadgeId.value = null
     showBadgeModal.value = false
+}
+
+// ── Testimonials ──
+async function fetchTestimonials() {
+    const { data } = await supabase
+        .from('tbl_testimonials')
+        .select('*')
+        .eq('profile_user_id', props.userId)
+        .eq('approval_status', 'approved')
+        .order('created_at', { ascending: false })
+
+    testimonials.value = data ?? []
+}
+
+const hasPostedTestimonial = computed(() => {
+    const myId = auth.session?.user?.id
+    if (!myId) return false
+    return testimonials.value.some(t => t.author_id === myId)
+})
+
+async function postTestimonial() {
+    if (!newTestimonial.value.trim() || !auth.session?.user) return
+    postingTestimonial.value = true
+    testimonialMessage.value = null
+
+    const authorName = [auth.user?.first_name, auth.user?.last_name].filter(Boolean).join(' ') || 'Member'
+
+    const { error } = await supabase.from('tbl_testimonials').insert({
+        profile_user_id: props.userId,
+        author_id: auth.session.user.id,
+        author_name: authorName,
+        content: newTestimonial.value.trim(),
+        approval_status: 'pending',
+    })
+
+    if (error) {
+        testimonialMessage.value = { type: 'error', text: error.message }
+    } else {
+        testimonialMessage.value = { type: 'success', text: 'Testimonial submitted! It will appear after the profile owner approves it.' }
+        newTestimonial.value = ''
+    }
+    postingTestimonial.value = false
+}
+
+function testimonialTimeAgo(d: string) {
+    const diff = Math.floor((Date.now() - new Date(d).getTime()) / 1000)
+    if (diff < 60) return 'Just now'
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
+    if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`
+    return new Date(d).toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
 const fullName = computed(() =>
@@ -368,6 +436,62 @@ function badgeEmoji(icon: string) {
                         <span>{{ badgeEmoji(badge.icon) }}</span>
                         <span>{{ badge.name }}</span>
                         <span class="opacity-60">{{ badge.count }}</span>
+                    </div>
+                </div>
+            </div>
+            <!-- Testimonials Section -->
+            <div class="bg-white rounded-lg border border-gray-200 p-5 mb-6">
+                <h2 class="font-heading font-semibold text-navy text-base mb-4">Testimonials</h2>
+
+                <!-- Post testimonial form -->
+                <div v-if="!hasPostedTestimonial" class="mb-4">
+                    <textarea
+                        v-model="newTestimonial"
+                        placeholder="Write a testimonial for this member..."
+                        rows="3"
+                        class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-navy/30 resize-none"
+                    />
+                    <div class="flex items-center justify-between mt-2">
+                        <p class="text-[11px] text-gray-400">Requires approval from the profile owner.</p>
+                        <button
+                            :disabled="!newTestimonial.trim() || postingTestimonial"
+                            class="px-4 py-2 bg-navy text-white text-xs font-medium rounded-lg hover:bg-navy-800 disabled:opacity-50 transition-colors"
+                            @click="postTestimonial"
+                        >
+                            {{ postingTestimonial ? 'Submitting...' : 'Submit Testimonial' }}
+                        </button>
+                    </div>
+                    <p
+                        v-if="testimonialMessage"
+                        class="text-xs mt-2 rounded-lg px-3 py-2"
+                        :class="testimonialMessage.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'"
+                    >
+                        {{ testimonialMessage.text }}
+                    </p>
+                </div>
+                <div v-else class="mb-4 text-xs text-gray-400 bg-gray-50 rounded-lg px-3 py-2">
+                    You've already submitted a testimonial for this member.
+                </div>
+
+                <!-- Approved testimonials list -->
+                <div v-if="!testimonials.length" class="text-sm text-gray-400 py-4 text-center">
+                    No testimonials yet. Be the first to write one!
+                </div>
+
+                <div v-else class="space-y-3">
+                    <div
+                        v-for="t in testimonials"
+                        :key="t.id"
+                        class="bg-gray-50 rounded-lg px-4 py-3"
+                    >
+                        <div class="flex items-center gap-2 mb-1.5">
+                            <div class="w-6 h-6 rounded-full bg-navy/10 flex items-center justify-center text-[10px] font-bold text-navy">
+                                {{ t.author_name?.[0] ?? '?' }}
+                            </div>
+                            <p class="text-xs font-medium text-gray-900">{{ t.author_name }}</p>
+                            <span class="text-[10px] text-gray-400">{{ testimonialTimeAgo(t.created_at) }}</span>
+                        </div>
+                        <p class="text-sm text-gray-700 whitespace-pre-line">{{ t.content }}</p>
                     </div>
                 </div>
             </div>
