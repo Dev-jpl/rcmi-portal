@@ -157,14 +157,14 @@ export const useScripturePlanStore = defineStore('scripture-plan', () => {
 
     /** Get today's reading from the active plan */
     async function fetchTodayReading(): Promise<ScripturePlanEntry | null> {
-        const today = new Date().toISOString().split('T')[0]
+        const now = new Date()
+        const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
 
         const { data: activePlan } = await supabase
             .from('tbl_scripture_plans')
             .select('id, title')
             .eq('is_active', true)
-            .limit(1)
-            .single()
+            .maybeSingle()
 
         if (!activePlan) return null
 
@@ -173,8 +173,7 @@ export const useScripturePlanStore = defineStore('scripture-plan', () => {
             .select('*')
             .eq('plan_id', activePlan.id)
             .eq('reading_date', today)
-            .limit(1)
-            .single()
+            .maybeSingle()
 
         return entry ?? null
     }

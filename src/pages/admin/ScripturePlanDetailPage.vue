@@ -40,7 +40,7 @@ const deleteTarget = ref<ScripturePlanEntry | null>(null)
 const entryDeleting = ref(false)
 
 // View mode
-const viewMode = ref<'list' | 'calendar'>('list')
+const viewMode = ref<'list' | 'calendar'>('calendar')
 const filterMonth = ref(new Date().toISOString().slice(0, 7)) // YYYY-MM
 
 const selectedBook = computed(() => getBookByName(entryForm.value.book_name))
@@ -86,7 +86,10 @@ const calendarDays = computed(() => {
     return days
 })
 
-const isToday = (dateStr: string) => dateStr === new Date().toISOString().split('T')[0]
+const isToday = (dateStr: string) => {
+    const now = new Date()
+    return dateStr === `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+}
 
 function openBulk() {
     bulkForm.value = {

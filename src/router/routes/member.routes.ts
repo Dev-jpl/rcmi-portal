@@ -67,6 +67,11 @@ export const memberRoutes: RouteRecordRaw[] = [
                 component: () => import('@/pages/member/PrayerRequestsPage.vue')
             },
             {
+                path: 'scripture',
+                name: 'member-scripture',
+                component: () => import('@/pages/member/ScriptureReadingPage.vue')
+            },
+            {
                 path: 'programs',
                 name: 'member-programs',
                 component: () => import('@/pages/member/ProgramsPage.vue')
