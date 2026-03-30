@@ -23,6 +23,10 @@ interface Enrollment {
     date_ended: string | null
     is_active: string | null
     created_at: string | null
+    approval_status: string | null
+    approved_by: string | null
+    approved_at: string | null
+    remarks: string | null
 }
 
 const route = useRoute()
@@ -36,12 +40,12 @@ const enrollments = ref<Enrollment[]>([])
 const loading = ref(true)
 const search = ref('')
 const message = ref<{ type: 'success' | 'error'; text: string } | null>(null)
-const filterStatus = ref<'all' | 'active' | 'ended'>('all')
+const filterStatus = ref<'all' | 'pending' | 'active' | 'ended'>('all')
 
 // Enroll modal
 const showEnrollModal = ref(false)
 const editingEnrollment = ref<Enrollment | null>(null)
-const enrollForm = ref({ user_id: '', date_started: '', date_ended: '', is_active: 'Y' })
+const enrollForm = ref({ user_id: '', date_started: '', date_ended: '', is_active: 'Y', approval_status: 'approved', remarks: '' })
 const enrollSaving = ref(false)
 
 onMounted(async () => {
@@ -69,14 +73,17 @@ async function fetchEnrollments() {
 
 // Stats
 const totalEnrolled = computed(() => enrollments.value.length)
-const activeCount = computed(() => enrollments.value.filter(e => e.is_active === 'Y').length)
+const pendingCount = computed(() => enrollments.value.filter(e => e.approval_status === 'pending').length)
+const activeCount = computed(() => enrollments.value.filter(e => e.is_active === 'Y' && e.approval_status !== 'pending').length)
 const completedCount = computed(() => enrollments.value.filter(e => e.is_active === 'N' || e.date_ended).length)
 
 const filtered = computed(() => {
     let list = enrollments.value
 
-    if (filterStatus.value === 'active') {
-        list = list.filter(e => e.is_active === 'Y' && !e.date_ended)
+    if (filterStatus.value === 'pending') {
+        list = list.filter(e => e.approval_status === 'pending')
+    } else if (filterStatus.value === 'active') {
+        list = list.filter(e => e.is_active === 'Y' && !e.date_ended && e.approval_status !== 'pending')
     } else if (filterStatus.value === 'ended') {
         list = list.filter(e => e.is_active === 'N' || e.date_ended)
     }
@@ -89,10 +96,72 @@ const filtered = computed(() => {
     return list
 })
 
+// Approval actions
+const approvingId = ref<number | null>(null)
+
+async function handleApprove(e: Enrollment) {
+    approvingId.value = e.id
+    const { error } = await supabase
+        .from('tbl_program_involvements')
+        .update({
+            approval_status: 'approved',
+            approved_by: auth.session?.user?.id ?? null,
+            approved_at: new Date().toISOString(),
+        })
+        .eq('id', e.id)
+
+    if (error) {
+        message.value = { type: 'error', text: error.message }
+    } else {
+        message.value = { type: 'success', text: `Enrollment approved for ${getMemberName(e.user_id)}.` }
+        await fetchEnrollments()
+    }
+    approvingId.value = null
+}
+
+async function handleReject(e: Enrollment) {
+    approvingId.value = e.id
+    const { error } = await supabase
+        .from('tbl_program_involvements')
+        .update({
+            approval_status: 'rejected',
+            is_active: 'N',
+            approved_by: auth.session?.user?.id ?? null,
+            approved_at: new Date().toISOString(),
+        })
+        .eq('id', e.id)
+
+    if (error) {
+        message.value = { type: 'error', text: error.message }
+    } else {
+        message.value = { type: 'success', text: `Enrollment rejected for ${getMemberName(e.user_id)}.` }
+        await fetchEnrollments()
+    }
+    approvingId.value = null
+}
+
+// Add completed (super_admin only — backtrack old completions)
+function openAddCompleted() {
+    editingEnrollment.value = null
+    const now = new Date()
+    const localToday = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+    enrollForm.value = {
+        user_id: '',
+        date_started: '',
+        date_ended: localToday,
+        is_active: 'N',
+        approval_status: 'approved',
+        remarks: 'Manually added — completed prior to system',
+    }
+    showEnrollModal.value = true
+}
+
 // Enroll modal
 function openAddEnrollment() {
     editingEnrollment.value = null
-    enrollForm.value = { user_id: '', date_started: new Date().toISOString().split('T')[0], date_ended: '', is_active: 'Y' }
+    const now = new Date()
+    const localToday = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+    enrollForm.value = { user_id: '', date_started: localToday, date_ended: '', is_active: 'Y', approval_status: 'approved', remarks: '' }
     showEnrollModal.value = true
 }
 
@@ -103,6 +172,8 @@ function openEditEnrollment(e: Enrollment) {
         date_started: e.date_started ?? '',
         date_ended: e.date_ended ?? '',
         is_active: e.is_active ?? 'Y',
+        approval_status: e.approval_status ?? 'approved',
+        remarks: e.remarks ?? '',
     }
     showEnrollModal.value = true
 }
@@ -112,13 +183,21 @@ async function handleSaveEnrollment() {
     enrollSaving.value = true
     message.value = null
 
-    const payload = {
+    const payload: Record<string, any> = {
         user_id: enrollForm.value.user_id,
         program_id: programId,
         program_type: program.value?.type ?? null,
         date_started: enrollForm.value.date_started || null,
         date_ended: enrollForm.value.date_ended || null,
         is_active: enrollForm.value.is_active,
+        approval_status: enrollForm.value.approval_status,
+        remarks: enrollForm.value.remarks.trim() || null,
+    }
+
+    // If admin is approving via form, stamp it
+    if (enrollForm.value.approval_status === 'approved' && editingEnrollment.value?.approval_status !== 'approved') {
+        payload.approved_by = auth.session?.user?.id ?? null
+        payload.approved_at = new Date().toISOString()
     }
 
     if (editingEnrollment.value) {
@@ -234,12 +313,21 @@ function formatDate(d: string | null) {
                             </span>
                         </div>
                     </div>
-                    <button
-                        class="px-4 py-2 bg-navy text-white text-sm font-semibold rounded-lg hover:bg-navy-700 transition-colors"
-                        @click="openAddEnrollment"
-                    >
-                        + Enroll Member
-                    </button>
+                    <div class="flex items-center gap-2">
+                        <button
+                            v-if="auth.roleType === 'super_admin'"
+                            class="px-4 py-2 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700 transition-colors"
+                            @click="openAddCompleted"
+                        >
+                            + Add Completed
+                        </button>
+                        <button
+                            class="px-4 py-2 bg-navy text-white text-sm font-semibold rounded-lg hover:bg-navy-700 transition-colors"
+                            @click="openAddEnrollment"
+                        >
+                            + Enroll Member
+                        </button>
+                    </div>
                 </div>
             </template>
             <div v-else class="text-gray-400">Program not found.</div>
@@ -255,10 +343,14 @@ function formatDate(d: string | null) {
         </p>
 
         <!-- Stats -->
-        <div v-if="!loading && program" class="grid grid-cols-3 gap-3 mb-6">
+        <div v-if="!loading && program" class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
             <div class="bg-white rounded-lg p-3 border border-gray-200">
-                <p class="text-[10px] text-gray-500 uppercase tracking-wider">Total Enrolled</p>
+                <p class="text-[10px] text-gray-500 uppercase tracking-wider">Total</p>
                 <p class="text-2xl font-heading font-bold text-navy">{{ totalEnrolled }}</p>
+            </div>
+            <div class="bg-white rounded-lg p-3 border border-gray-200" :class="pendingCount > 0 ? 'border-amber-300 bg-amber-50/50' : ''">
+                <p class="text-[10px] text-gray-500 uppercase tracking-wider">Pending</p>
+                <p class="text-2xl font-heading font-bold" :class="pendingCount > 0 ? 'text-amber-600' : 'text-gray-400'">{{ pendingCount }}</p>
             </div>
             <div class="bg-white rounded-lg p-3 border border-gray-200">
                 <p class="text-[10px] text-gray-500 uppercase tracking-wider">Active</p>
@@ -276,6 +368,7 @@ function formatDate(d: string | null) {
                 <button
                     v-for="f in [
                         { key: 'all' as const, label: 'All' },
+                        { key: 'pending' as const, label: 'Pending' },
                         { key: 'active' as const, label: 'Active' },
                         { key: 'ended' as const, label: 'Ended' },
                     ]"
@@ -344,18 +437,39 @@ function formatDate(d: string | null) {
                                     <span
                                         class="text-xs px-2 py-0.5 rounded-full font-medium"
                                         :class="{
-                                            'bg-green-50 text-green-700': e.is_active === 'Y' && !e.date_ended,
-                                            'bg-blue-50 text-blue-700': e.is_active === 'Y' && e.date_ended,
-                                            'bg-gray-100 text-gray-500': e.is_active === 'N',
+                                            'bg-amber-100 text-amber-700': e.approval_status === 'pending',
+                                            'bg-red-50 text-red-600': e.approval_status === 'rejected',
+                                            'bg-green-50 text-green-700': e.approval_status !== 'pending' && e.approval_status !== 'rejected' && e.is_active === 'Y' && !e.date_ended,
+                                            'bg-blue-50 text-blue-700': e.approval_status !== 'pending' && e.is_active === 'Y' && e.date_ended,
+                                            'bg-gray-100 text-gray-500': e.approval_status !== 'pending' && e.approval_status !== 'rejected' && e.is_active === 'N' && !e.date_ended,
                                         }"
                                     >
-                                        {{ e.date_ended ? 'Completed' : (e.is_active === 'Y' ? 'Active' : 'Ended') }}
+                                        {{ e.approval_status === 'pending' ? 'Pending' : e.approval_status === 'rejected' ? 'Rejected' : e.date_ended ? 'Completed' : (e.is_active === 'Y' ? 'Active' : 'Ended') }}
                                     </span>
                                 </td>
                                 <td class="px-4 py-3 text-right">
-                                    <button class="text-xs text-navy hover:underline" @click="openEditEnrollment(e)">
-                                        Edit
-                                    </button>
+                                    <div class="flex items-center justify-end gap-2">
+                                        <!-- Approval actions for pending -->
+                                        <template v-if="e.approval_status === 'pending'">
+                                            <button
+                                                :disabled="approvingId === e.id"
+                                                class="text-xs text-green-600 hover:underline font-medium"
+                                                @click="handleApprove(e)"
+                                            >
+                                                Approve
+                                            </button>
+                                            <button
+                                                :disabled="approvingId === e.id"
+                                                class="text-xs text-red-500 hover:underline"
+                                                @click="handleReject(e)"
+                                            >
+                                                Reject
+                                            </button>
+                                        </template>
+                                        <button class="text-xs text-navy hover:underline" @click="openEditEnrollment(e)">
+                                            Edit
+                                        </button>
+                                    </div>
                                 </td>
                             </tr>
                         </tbody>
@@ -417,15 +531,37 @@ function formatDate(d: string | null) {
                                     />
                                 </div>
                             </div>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                                    <select
+                                        v-model="enrollForm.is_active"
+                                        class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-navy/30"
+                                    >
+                                        <option value="Y">Active</option>
+                                        <option value="N">Ended</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Approval</label>
+                                    <select
+                                        v-model="enrollForm.approval_status"
+                                        class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-navy/30"
+                                    >
+                                        <option value="pending">Pending</option>
+                                        <option value="approved">Approved</option>
+                                        <option value="rejected">Rejected</option>
+                                    </select>
+                                </div>
+                            </div>
                             <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                                <select
-                                    v-model="enrollForm.is_active"
-                                    class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-navy/30"
-                                >
-                                    <option value="Y">Active</option>
-                                    <option value="N">Ended</option>
-                                </select>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Remarks</label>
+                                <input
+                                    v-model="enrollForm.remarks"
+                                    type="text"
+                                    placeholder="Optional notes..."
+                                    class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-navy/30"
+                                />
                             </div>
                             <button
                                 type="submit"

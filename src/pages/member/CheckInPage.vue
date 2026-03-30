@@ -26,11 +26,11 @@ async function fetchActiveEvents() {
     const now = new Date().toISOString()
     const churchId = auth.profile?.satellite_church_id
 
+    // Show all active events whose end time hasn't passed yet
     let query = supabase
         .from('tbl_events')
         .select('*')
         .eq('is_active', true)
-        .lte('duration_from', now)
         .gte('duration_to', now)
         .order('duration_from')
 
@@ -44,7 +44,8 @@ async function fetchActiveEvents() {
 }
 
 function markAlreadyCheckedIn() {
-    const today = new Date().toISOString().split('T')[0]
+    const now = new Date()
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
     for (const log of attendance.logs) {
         if (log.log_date === today && log.event_id) {
             checkedIn.value.add(log.event_id)

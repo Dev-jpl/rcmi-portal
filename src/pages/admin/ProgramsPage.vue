@@ -3,8 +3,10 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { supabase } from '@/lib/supabase'
 import { useAdminStore } from '@/stores/admin.store'
+import { useAuthStore } from '@/stores/auth.store'
 
 const router = useRouter()
+const auth = useAuthStore()
 
 interface Program {
     id: number
@@ -24,6 +26,8 @@ interface Enrollment {
     date_ended: string | null
     is_active: string | null
     created_at: string | null
+    approval_status: string | null
+    remarks: string | null
 }
 
 const admin = useAdminStore()
@@ -40,11 +44,16 @@ const editingProgram = ref<Program | null>(null)
 const programForm = ref({ type: '', description: '', date_started: '', duration_days: null as number | null, is_active: true })
 const programSaving = ref(false)
 
+// Delete confirmation
+const showDeleteModal = ref(false)
+const deleteTarget = ref<{ type: 'program' | 'enrollment'; id: number; label: string } | null>(null)
+const deleting = ref(false)
+
 // Enrollments
 const enrollments = ref<Enrollment[]>([])
 const showEnrollModal = ref(false)
 const editingEnrollment = ref<Enrollment | null>(null)
-const enrollForm = ref({ user_id: '', program_id: null as number | null, date_started: '', date_ended: '', is_active: 'Y' })
+const enrollForm = ref({ user_id: '', program_id: null as number | null, date_started: '', date_ended: '', is_active: 'Y', approval_status: 'approved', remarks: '' })
 const enrollSaving = ref(false)
 
 onMounted(async () => {
@@ -143,6 +152,48 @@ async function toggleProgramActive(p: Program) {
     }
 }
 
+function openDeleteProgram(p: Program) {
+    deleteTarget.value = { type: 'program', id: p.id, label: p.type }
+    showDeleteModal.value = true
+}
+
+function openDeleteEnrollment(e: Enrollment) {
+    deleteTarget.value = { type: 'enrollment', id: e.id, label: `${getMemberName(e.user_id)} from ${getProgramName(e.program_id)}` }
+    showDeleteModal.value = true
+}
+
+async function handleDelete() {
+    if (!deleteTarget.value) return
+    deleting.value = true
+    message.value = null
+
+    const { type, id } = deleteTarget.value
+
+    if (type === 'program') {
+        // Delete enrollments for this program first
+        await supabase.from('tbl_program_involvements').delete().eq('program_id', id)
+        const { error } = await supabase.from('lib_programs').delete().eq('id', id)
+        if (error) {
+            message.value = { type: 'error', text: error.message }
+        } else {
+            message.value = { type: 'success', text: 'Program deleted.' }
+            await Promise.all([fetchPrograms(), fetchEnrollments()])
+        }
+    } else {
+        const { error } = await supabase.from('tbl_program_involvements').delete().eq('id', id)
+        if (error) {
+            message.value = { type: 'error', text: error.message }
+        } else {
+            message.value = { type: 'success', text: 'Enrollment removed.' }
+            await fetchEnrollments()
+        }
+    }
+
+    deleting.value = false
+    showDeleteModal.value = false
+    deleteTarget.value = null
+}
+
 function getEnrolledCount(programId: number) {
     return enrollments.value.filter(e => e.program_id === programId && e.is_active === 'Y').length
 }
@@ -168,9 +219,19 @@ const filteredEnrollments = computed(() => {
     )
 })
 
+function openAddCompleted() {
+    editingEnrollment.value = null
+    const now = new Date()
+    const localToday = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+    enrollForm.value = { user_id: '', program_id: null, date_started: '', date_ended: localToday, is_active: 'N', approval_status: 'approved', remarks: 'Manually added — completed prior to system' }
+    showEnrollModal.value = true
+}
+
 function openAddEnrollment() {
     editingEnrollment.value = null
-    enrollForm.value = { user_id: '', program_id: null, date_started: new Date().toISOString().split('T')[0], date_ended: '', is_active: 'Y' }
+    const now = new Date()
+    const localToday = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+    enrollForm.value = { user_id: '', program_id: null, date_started: localToday, date_ended: '', is_active: 'Y', approval_status: 'approved', remarks: '' }
     showEnrollModal.value = true
 }
 
@@ -182,6 +243,8 @@ function openEditEnrollment(e: Enrollment) {
         date_started: e.date_started ?? '',
         date_ended: e.date_ended ?? '',
         is_active: e.is_active ?? 'Y',
+        approval_status: e.approval_status ?? 'approved',
+        remarks: e.remarks ?? '',
     }
     showEnrollModal.value = true
 }
@@ -200,6 +263,8 @@ async function handleSaveEnrollment() {
         date_started: enrollForm.value.date_started || null,
         date_ended: enrollForm.value.date_ended || null,
         is_active: enrollForm.value.is_active,
+        approval_status: enrollForm.value.approval_status,
+        remarks: enrollForm.value.remarks.trim() || null,
     }
 
     if (editingEnrollment.value) {
@@ -281,13 +346,21 @@ function getDuration(startDate: string | null, endDate: string | null) {
             >
                 + Add Program
             </button>
-            <button
-                v-else
-                class="px-4 py-2 bg-navy text-white text-sm font-semibold rounded-lg hover:bg-navy-700 transition-colors"
-                @click="openAddEnrollment"
-            >
-                + Enroll Member
-            </button>
+            <div v-else class="flex items-center gap-2">
+                <button
+                    v-if="auth.roleType === 'super_admin'"
+                    class="px-4 py-2 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700 transition-colors"
+                    @click="openAddCompleted"
+                >
+                    + Add Completed
+                </button>
+                <button
+                    class="px-4 py-2 bg-navy text-white text-sm font-semibold rounded-lg hover:bg-navy-700 transition-colors"
+                    @click="openAddEnrollment"
+                >
+                    + Enroll Member
+                </button>
+            </div>
         </div>
 
         <!-- Tabs -->
@@ -392,6 +465,12 @@ function getDuration(startDate: string | null, endDate: string | null) {
                                         >
                                             {{ p.is_active ? 'Deactivate' : 'Activate' }}
                                         </button>
+                                        <button
+                                            class="text-xs text-red-500 hover:underline"
+                                            @click="openDeleteProgram(p)"
+                                        >
+                                            Delete
+                                        </button>
                                     </div>
                                 </td>
                             </tr>
@@ -431,18 +510,31 @@ function getDuration(startDate: string | null, endDate: string | null) {
                                 <td class="px-4 py-3">
                                     <span
                                         class="text-xs px-2 py-0.5 rounded-full font-medium"
-                                        :class="e.is_active === 'Y' ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'"
+                                        :class="{
+                                            'bg-amber-100 text-amber-700': e.approval_status === 'pending',
+                                            'bg-red-50 text-red-600': e.approval_status === 'rejected',
+                                            'bg-green-50 text-green-700': e.approval_status !== 'pending' && e.approval_status !== 'rejected' && e.is_active === 'Y',
+                                            'bg-gray-100 text-gray-500': e.approval_status !== 'pending' && e.approval_status !== 'rejected' && e.is_active !== 'Y',
+                                        }"
                                     >
-                                        {{ e.is_active === 'Y' ? 'Active' : 'Ended' }}
+                                        {{ e.approval_status === 'pending' ? 'Pending' : e.approval_status === 'rejected' ? 'Rejected' : (e.is_active === 'Y' ? 'Active' : 'Ended') }}
                                     </span>
                                 </td>
                                 <td class="px-4 py-3 text-right">
-                                    <button
-                                        class="text-xs text-navy hover:underline"
-                                        @click="openEditEnrollment(e)"
-                                    >
-                                        Edit
-                                    </button>
+                                    <div class="flex items-center justify-end gap-2">
+                                        <button
+                                            class="text-xs text-navy hover:underline"
+                                            @click="openEditEnrollment(e)"
+                                        >
+                                            Edit
+                                        </button>
+                                        <button
+                                            class="text-xs text-red-500 hover:underline"
+                                            @click="openDeleteEnrollment(e)"
+                                        >
+                                            Delete
+                                        </button>
+                                    </div>
                                 </td>
                             </tr>
                         </tbody>
@@ -529,6 +621,41 @@ function getDuration(startDate: string | null, endDate: string | null) {
             </Transition>
         </Teleport>
 
+        <!-- Delete Confirmation Modal -->
+        <Teleport to="body">
+            <Transition name="fade">
+                <div v-if="showDeleteModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+                    <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="showDeleteModal = false" />
+                    <div class="relative bg-white rounded-lg shadow-xl w-full max-w-sm p-6 text-center">
+                        <div class="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                        </div>
+                        <h3 class="font-heading font-semibold text-gray-900 text-lg mb-2">Confirm Delete</h3>
+                        <p class="text-sm text-gray-500 mb-6">
+                            Are you sure you want to delete <strong>{{ deleteTarget?.label }}</strong>? This action cannot be undone.
+                        </p>
+                        <div class="flex gap-3">
+                            <button
+                                class="flex-1 py-2.5 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors text-sm"
+                                @click="showDeleteModal = false"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                :disabled="deleting"
+                                class="flex-1 py-2.5 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors text-sm"
+                                @click="handleDelete"
+                            >
+                                {{ deleting ? 'Deleting...' : 'Delete' }}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </Transition>
+        </Teleport>
+
         <!-- Enrollment Modal -->
         <Teleport to="body">
             <Transition name="fade">
@@ -599,15 +726,37 @@ function getDuration(startDate: string | null, endDate: string | null) {
                                     />
                                 </div>
                             </div>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                                    <select
+                                        v-model="enrollForm.is_active"
+                                        class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-navy/30"
+                                    >
+                                        <option value="Y">Active</option>
+                                        <option value="N">Ended</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Approval</label>
+                                    <select
+                                        v-model="enrollForm.approval_status"
+                                        class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-navy/30"
+                                    >
+                                        <option value="pending">Pending</option>
+                                        <option value="approved">Approved</option>
+                                        <option value="rejected">Rejected</option>
+                                    </select>
+                                </div>
+                            </div>
                             <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                                <select
-                                    v-model="enrollForm.is_active"
-                                    class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-navy/30"
-                                >
-                                    <option value="Y">Active</option>
-                                    <option value="N">Ended</option>
-                                </select>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Remarks</label>
+                                <input
+                                    v-model="enrollForm.remarks"
+                                    type="text"
+                                    placeholder="Optional notes..."
+                                    class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-navy/30"
+                                />
                             </div>
                             <button
                                 type="submit"

@@ -39,12 +39,15 @@ export const useAttendanceStore = defineStore('attendance', () => {
         const userId = auth.session.user.id
 
         // Check for duplicate
+        const now = new Date()
+        const localToday = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+
         const { data: existing } = await supabase
             .from('tbl_attendance_logs')
             .select('id')
             .eq('user_id', userId)
             .eq('event_id', event.id)
-            .eq('log_date', new Date().toISOString().split('T')[0])
+            .eq('log_date', localToday)
             .limit(1)
 
         if (existing && existing.length > 0) {
@@ -60,7 +63,7 @@ export const useAttendanceStore = defineStore('attendance', () => {
                 event_id: event.id,
                 event_title: event.event_title,
                 input_method: 'self',
-                log_date: new Date().toISOString().split('T')[0],
+                log_date: localToday,
                 logged_at: new Date().toISOString(),
                 logged_by: userId,
                 logged_by_name: userName,
