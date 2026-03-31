@@ -115,6 +115,7 @@ const navGroups = computed<NavGroup[]>(() => {
         { label: 'Events', to: { name: 'admin-events' }, iconKey: 'events' },
         { label: 'Attendance', to: { name: 'admin-attendance' }, iconKey: 'attendance' },
         { label: 'Programs', to: { name: 'admin-programs' }, iconKey: 'programs' },
+        { label: 'Bible Studies', to: { name: 'admin-bible-studies' }, iconKey: 'scripture' },
         { label: 'Ministries', to: { name: 'admin-ministries' }, iconKey: 'ministries' },
       ],
     })
@@ -183,7 +184,10 @@ const navGroups = computed<NavGroup[]>(() => {
 
     groups.push({
       title: 'Tools',
-      items: [{ label: 'QR Scan', to: { name: 'admin-qr-scan' }, iconKey: 'qrscan' }],
+      items: [
+        { label: 'Bible Studies', to: { name: 'admin-bible-studies' }, iconKey: 'scripture' },
+        { label: 'QR Scan', to: { name: 'admin-qr-scan' }, iconKey: 'qrscan' },
+      ],
     })
   }
 

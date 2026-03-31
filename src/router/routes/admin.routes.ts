@@ -210,6 +210,23 @@ export const adminRoutes: RouteRecordRaw[] = [
                 ]
             },
             {
+                path: 'bible-studies',
+                meta: { roles: ['super_admin', 'admin', 'pastoral'] },
+                children: [
+                    {
+                        path: '',
+                        name: 'admin-bible-studies',
+                        component: () => import('@/pages/admin/BibleStudiesPage.vue')
+                    },
+                    {
+                        path: ':id',
+                        name: 'admin-bible-study-detail',
+                        component: () => import('@/pages/admin/BibleStudyDetailPage.vue'),
+                        props: true
+                    }
+                ]
+            },
+            {
                 path: 'audit-log',
                 name: 'admin-audit-log',
                 component: () => import('@/pages/admin/AuditLogPage.vue'),

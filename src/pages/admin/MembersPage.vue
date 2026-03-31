@@ -246,10 +246,14 @@ function formatDate(d: string | null) {
                         >
                             <td class="px-4 py-3">
                                 <div class="flex items-center gap-3">
-                                    <div class="w-8 h-8 rounded-full bg-navy-100 flex items-center justify-center text-xs font-bold text-navy shrink-0">
-                                        {{ (m.first_name?.[0] ?? '') + (m.last_name?.[0] ?? '') }}
+                                    <div class="w-8 h-8 rounded-full bg-navy-100 flex items-center justify-center text-xs font-bold text-navy shrink-0 overflow-hidden">
+                                        <img v-if="m.profile_photo_url" :src="m.profile_photo_url" :alt="`${m.first_name} ${m.last_name}`" class="w-full h-full object-cover" />
+                                        <span v-else>{{ (m.first_name?.[0] ?? '') + (m.last_name?.[0] ?? '') }}</span>
                                     </div>
-                                    <span class="font-medium text-gray-900">{{ m.first_name }} {{ m.last_name }}</span>
+                                    <div class="min-w-0">
+                                        <span class="font-medium text-gray-900">{{ m.first_name }} {{ m.last_name }}</span>
+                                        <p class="text-xs text-gray-400 md:hidden truncate">{{ m.email }}</p>
+                                    </div>
                                 </div>
                             </td>
                             <td class="px-4 py-3 text-gray-500 hidden md:table-cell">{{ m.email }}</td>
