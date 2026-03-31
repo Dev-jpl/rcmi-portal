@@ -206,15 +206,38 @@ function formatRef(e: ScripturePlanEntry) {
 
 function prevMonth() {
     const [y, m] = filterMonth.value.split('-').map(Number)
-    const d = new Date(y, m - 2, 1)
-    filterMonth.value = d.toISOString().slice(0, 7)
+    const newMonth = m - 1
+    if (newMonth < 1) {
+        filterMonth.value = `${y - 1}-12`
+    } else {
+        filterMonth.value = `${y}-${String(newMonth).padStart(2, '0')}`
+    }
 }
 
 function nextMonth() {
     const [y, m] = filterMonth.value.split('-').map(Number)
-    const d = new Date(y, m, 1)
-    filterMonth.value = d.toISOString().slice(0, 7)
+    const newMonth = m + 1
+    if (newMonth > 12) {
+        filterMonth.value = `${y + 1}-01`
+    } else {
+        filterMonth.value = `${y}-${String(newMonth).padStart(2, '0')}`
+    }
 }
+
+function setMonth(m: number) {
+    const [y] = filterMonth.value.split('-').map(Number)
+    filterMonth.value = `${y}-${String(m).padStart(2, '0')}`
+}
+
+function setYear(y: number) {
+    const [, m] = filterMonth.value.split('-').map(Number)
+    filterMonth.value = `${y}-${String(m).padStart(2, '0')}`
+}
+
+const currentMonth = computed(() => Number(filterMonth.value.split('-')[1]))
+const currentYear = computed(() => Number(filterMonth.value.split('-')[0]))
+
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 
 function monthLabel(ym: string) {
     const [y, m] = ym.split('-').map(Number)
@@ -305,7 +328,22 @@ onMounted(async () => {
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
                     </svg>
                 </button>
-                <h2 class="text-sm font-semibold text-gray-900">{{ monthLabel(filterMonth) }}</h2>
+                <div class="flex items-center gap-2">
+                    <select
+                        :value="currentMonth"
+                        class="px-2 py-1 border border-gray-300 rounded-lg text-sm font-semibold text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-navy/30"
+                        @change="setMonth(Number(($event.target as HTMLSelectElement).value))"
+                    >
+                        <option v-for="(name, i) in MONTH_NAMES" :key="i" :value="i + 1">{{ name }}</option>
+                    </select>
+                    <select
+                        :value="currentYear"
+                        class="px-2 py-1 border border-gray-300 rounded-lg text-sm font-semibold text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-navy/30"
+                        @change="setYear(Number(($event.target as HTMLSelectElement).value))"
+                    >
+                        <option v-for="y in 5" :key="y" :value="currentYear - 2 + y - 1">{{ currentYear - 2 + y - 1 }}</option>
+                    </select>
+                </div>
                 <button class="p-2 hover:bg-gray-100 rounded-lg transition-colors" @click="nextMonth">
                     <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
