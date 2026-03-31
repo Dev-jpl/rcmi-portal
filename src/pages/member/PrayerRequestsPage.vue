@@ -346,7 +346,7 @@ onUnmounted(() => {
         <h1 class="text-2xl font-heading font-bold text-navy mb-6">Prayer Requests</h1>
 
         <!-- Post form -->
-        <div class="bg-white rounded-xl border border-gray-200 p-4 mb-6">
+        <div v-if="auth.isApproved" class="bg-white rounded-xl border border-gray-200 p-4 mb-6">
             <textarea
                 v-model="newContent"
                 placeholder="Share your prayer request..."
@@ -545,7 +545,7 @@ onUnmounted(() => {
                         </div>
 
                         <!-- Comment input -->
-                        <div class="flex gap-2">
+                        <div v-if="auth.isApproved" class="flex gap-2">
                             <div class="w-6 h-6 rounded-full bg-navy/10 flex items-center justify-center text-[10px] font-bold text-navy shrink-0 mt-1">
                                 {{ (auth.user?.first_name?.[0] ?? '') + (auth.user?.last_name?.[0] ?? '') }}
                             </div>

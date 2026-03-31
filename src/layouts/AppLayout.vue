@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth.store'
 import NotificationBell from '@/components/common/NotificationBell.vue'
@@ -10,6 +10,20 @@ const router = useRouter()
 const sidebarOpen = ref(false)
 const showUserMenu = ref(false)
 const showQr = ref(false)
+const showOnboardingModal = ref(false)
+
+onMounted(() => {
+    if (auth.isPending) {
+        if (!sessionStorage.getItem('onboardingShown')) {
+            showOnboardingModal.value = true
+            sessionStorage.setItem('onboardingShown', 'true')
+        }
+    }
+})
+
+function closeOnboarding() {
+    showOnboardingModal.value = false
+}
 
 const icons = {
     dashboard: `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zm0 9.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zm9.75-9.75A2.25 2.25 0 0115.75 3.75H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zm0 9.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25a2.25 2.25 0 01-2.25-2.25v-2.25z"/>`,
@@ -289,4 +303,29 @@ async function handleLogout() {
     </div>
 
     <QrCodeModal :open="showQr" @close="showQr = false" />
+
+    <!-- Onboarding / Pending Modal -->
+    <Teleport to="body">
+        <div v-if="showOnboardingModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" @click.self="closeOnboarding">
+            <div class="bg-white rounded-lg shadow-xl w-full max-w-md p-6 text-center">
+                <div class="w-14 h-14 rounded-full bg-blue-50 text-blue-500 mx-auto flex items-center justify-center mb-4">
+                    <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                </div>
+                <h3 class="text-xl font-heading font-bold text-navy mb-2">Account Review Pending</h3>
+                <p class="text-sm text-gray-500 leading-relaxed mb-6">
+                    Welcome to the RCMI Portal! Your account is currently under review by a church administrator.
+                    <br><br>
+                    You have <strong>view-only</strong> access to explore the community. Once your account is fully approved, you'll be able to create posts, submit prayer requests, and manage your profile. Welcome aboard!
+                </p>
+                <div class="flex flex-col sm:flex-row justify-center gap-3">
+                    <button class="px-5 py-2.5 text-gray-500 hover:text-gray-700 text-sm font-medium border border-gray-200 rounded-lg hover:bg-gray-50 transition" @click="handleLogout">
+                        Sign Out
+                    </button>
+                    <button class="px-6 py-2.5 bg-navy text-white text-sm font-semibold rounded-lg hover:bg-navy-700 transition" @click="closeOnboarding">
+                        Start Exploring
+                    </button>
+                </div>
+            </div>
+        </div>
+    </Teleport>
 </template>

@@ -16,10 +16,7 @@ export async function authGuard(
         return next({ name: 'login', query: { redirect: to.fullPath } })
     }
 
-    // Block pending members from accessing app
-    if (auth.profile?.status === 'pending' && to.name !== 'pending') {
-        return next({ name: 'pending' })
-    }
+    // Removed pending block: pending users can now access member-dashboard but with restricted privileges
 
     // Redirect rejected members to dedicated page
     if (auth.profile?.status === 'rejected' && to.name !== 'rejected') {
@@ -75,9 +72,9 @@ export async function guestGuard(
     if (!auth.resolved) await auth.resolveSession()
 
     if (auth.user) {
-        // Pending → pending page
+        // Pending → dashboard (with restricted UI)
         if (auth.profile?.status === 'pending') {
-            return next({ name: 'pending' })
+            return next({ name: 'member-dashboard' })
         }
         // Rejected → rejected page
         if (auth.profile?.status === 'rejected') {
