@@ -728,10 +728,7 @@ function markTouched(field: string) {
           </button>
           <button
             class="px-5 py-2 bg-navy text-white text-sm font-semibold rounded-lg hover:bg-navy-700 transition"
-            @click="
-              showAgreementModal = false
-              agreeTerms = true
-            "
+            @click="showAgreementModal = false; agreeTerms = true"
           >
             I Agree
           </button>
