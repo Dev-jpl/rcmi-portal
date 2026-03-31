@@ -2,12 +2,16 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { supabase } from '@/lib/supabase'
+import { ministryIcons } from '@/utils/ministryIcons'
+
+const availableIcons = Object.keys(ministryIcons)
 
 interface Ministry {
     id: number
     ministry_type: string
     description: string | null
     is_active: boolean
+    icon: string
     memberCount?: number
 }
 
@@ -27,6 +31,7 @@ const form = ref({
     ministry_type: '',
     description: '',
     is_active: true,
+    icon: 'ministries',
 })
 
 onMounted(async () => {
@@ -69,7 +74,7 @@ const filtered = computed(() => {
 
 function openAdd() {
     editingId.value = null
-    form.value = { ministry_type: '', description: '', is_active: true }
+    form.value = { ministry_type: '', description: '', is_active: true, icon: 'ministries' }
     showModal.value = true
 }
 
@@ -79,6 +84,7 @@ function openEdit(m: Ministry) {
         ministry_type: m.ministry_type,
         description: m.description ?? '',
         is_active: m.is_active,
+        icon: m.icon ?? 'ministries'
     }
     showModal.value = true
 }
@@ -121,6 +127,7 @@ async function handleSave() {
                 ministry_type: form.value.ministry_type.trim(),
                 description: form.value.description.trim() || null,
                 is_active: form.value.is_active,
+                icon: form.value.icon,
             })
             .eq('id', editingId.value)
         if (error) {
@@ -133,6 +140,7 @@ async function handleSave() {
             ministry_type: form.value.ministry_type.trim(),
             description: form.value.description.trim() || null,
             is_active: form.value.is_active,
+            icon: form.value.icon,
         })
         if (error) {
             message.value = { type: 'error', text: error.message }
@@ -206,9 +214,7 @@ function goToDetail(m: Ministry) {
             >
                 <div class="flex items-start justify-between mb-3">
                     <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-navy to-navy-600 flex items-center justify-center shrink-0">
-                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
-                        </svg>
+                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" v-html="ministryIcons[m.icon ?? 'ministries']"></svg>
                     </div>
                     <div class="flex items-center gap-2" @click.stop>
                         <span
@@ -269,6 +275,21 @@ function goToDetail(m: Ministry) {
                                 placeholder="Short description of this ministry..."
                                 class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-navy/30 resize-none"
                             />
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Icon</label>
+                            <div class="flex flex-wrap gap-2">
+                                <button
+                                    v-for="ico in availableIcons"
+                                    :key="ico"
+                                    type="button"
+                                    class="w-10 h-10 rounded-lg flex items-center justify-center border transition-colors focus:outline-none focus:ring-2 focus:ring-navy/30"
+                                    :class="form.icon === ico ? 'border-navy bg-navy/5 text-navy' : 'border-gray-200 text-gray-400 hover:border-gray-300 hover:text-gray-600'"
+                                    @click="form.icon = ico"
+                                >
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" v-html="ministryIcons[ico]"></svg>
+                                </button>
+                            </div>
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>

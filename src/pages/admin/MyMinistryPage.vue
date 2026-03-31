@@ -1,9 +1,12 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useAuthStore } from '@/stores/auth.store'
 import { supabase } from '@/lib/supabase'
+import { useRoute, useRouter } from 'vue-router'
 
 const auth = useAuthStore()
+const route = useRoute()
+const router = useRouter()
 
 interface Ministry {
     id: number
@@ -86,10 +89,28 @@ const selectedMinistry = computed(() => myMinistries.value.find(m => m.id === se
 onMounted(async () => {
     await fetchMyMinistries()
     await fetchUsers()
+    
+    if (route.query.mid) {
+        selectedMinistryId.value = Number(route.query.mid)
+    } else if (myMinistries.value.length > 0 && !selectedMinistryId.value) {
+        selectedMinistryId.value = myMinistries.value[0]!.id
+        router.replace({ query: { mid: selectedMinistryId.value } })
+    }
+    
     if (selectedMinistryId.value) {
         await loadMinistryData()
     }
     loading.value = false
+})
+
+watch(() => route.query.mid, async (newMid) => {
+    if (newMid && Number(newMid) !== selectedMinistryId.value) {
+        selectedMinistryId.value = Number(newMid)
+        members.value = []
+        search.value = ''
+        filterType.value = 'all'
+        await loadMinistryData()
+    }
 })
 
 async function fetchMyMinistries() {
@@ -102,9 +123,6 @@ async function fetchMyMinistries() {
         .order('ministry_type')
 
     myMinistries.value = (data ?? []) as Ministry[]
-    if (myMinistries.value.length && !selectedMinistryId.value) {
-        selectedMinistryId.value = myMinistries.value[0].id
-    }
 }
 
 async function fetchUsers() {
@@ -137,13 +155,6 @@ async function loadMinistryData() {
     ministryRoles.value = (rolesRes.data ?? []) as MinistryRole[]
 }
 
-async function switchMinistry(id: number) {
-    selectedMinistryId.value = id
-    members.value = []
-    search.value = ''
-    filterType.value = 'all'
-    await loadMinistryData()
-}
 
 const filtered = computed(() => {
     let list = members.value
@@ -267,20 +278,6 @@ function userName(u?: { first_name: string | null; last_name: string | null }) {
             </button>
         </div>
 
-        <!-- Ministry Selector (if head of multiple) -->
-        <div v-if="myMinistries.length > 1" class="flex gap-2 mb-6 flex-wrap">
-            <button
-                v-for="m in myMinistries"
-                :key="m.id"
-                @click="switchMinistry(m.id)"
-                class="px-4 py-2 rounded-lg text-sm font-medium border transition-colors"
-                :class="selectedMinistryId === m.id
-                    ? 'border-navy bg-navy text-white'
-                    : 'border-gray-300 text-gray-600 hover:bg-gray-50'"
-            >
-                {{ m.ministry_type }}
-            </button>
-        </div>
 
         <!-- Loading -->
         <div v-if="loading" class="space-y-3">

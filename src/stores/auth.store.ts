@@ -21,6 +21,7 @@ export const useAuthStore = defineStore('auth', () => {
     const isLpathLeader = ref(false)
     const isMinistryHead = ref(false)
     const ministryHeadIds = ref<number[]>([])
+    const myMinistries = ref<{ id: number; name: string; icon: string }[]>([])
 
     // ── Getters ───────────────────────────────────────────────
     const isAuthenticated = computed(() => !!session.value)
@@ -88,7 +89,7 @@ export const useAuthStore = defineStore('auth', () => {
             supabase.from('tbl_pastoral_members').select('id').eq('user_id', userId).eq('is_active', 'Y').limit(1),
             supabase.from('tbl_network_leaders').select('id').eq('user_id', userId).eq('is_active', 'Y').limit(1),
             supabase.from('tbl_lpath_leaders').select('id').eq('user_id', userId).eq('is_active', 'Y').limit(1),
-            supabase.from('tbl_ministry_involvements').select('ministry_id').eq('user_id', userId).eq('member_type', 'head').eq('is_active', 'Y'),
+            supabase.from('tbl_ministry_involvements').select('ministry_id, ministry_type, lib_ministries(icon)').eq('user_id', userId).eq('member_type', 'head').eq('is_active', 'Y'),
         ])
 
         user.value = userData ?? null
@@ -98,6 +99,11 @@ export const useAuthStore = defineStore('auth', () => {
         isLpathLeader.value = (lpathData?.length ?? 0) > 0
         isMinistryHead.value = (ministryHeadData?.length ?? 0) > 0
         ministryHeadIds.value = (ministryHeadData ?? []).map((d: any) => d.ministry_id)
+        myMinistries.value = (ministryHeadData ?? []).map((d: any) => ({
+            id: d.ministry_id,
+            name: d.ministry_type ?? 'My Ministry',
+            icon: d.lib_ministries?.icon || 'ministries'
+        }))
     }
 
     async function register(payload: {
@@ -250,6 +256,7 @@ export const useAuthStore = defineStore('auth', () => {
         isLpathLeader.value = false
         isMinistryHead.value = false
         ministryHeadIds.value = []
+        myMinistries.value = []
     }
 
     return {
@@ -271,6 +278,7 @@ export const useAuthStore = defineStore('auth', () => {
         isLpathLeader,
         isMinistryHead,
         ministryHeadIds,
+        myMinistries,
         hasLeadershipRole,
         canAccessAdmin,
         roleType,
