@@ -23,6 +23,28 @@ const devotionStreak = ref(0)
 
 const isOwnProfile = computed(() => auth.session?.user?.id === props.userId)
 
+// Ministry Involvement
+interface MinistryInvolvement {
+    id: number
+    ministry_id: number | null
+    ministry_type: string | null
+    ministry_role_title: string | null
+    member_type: string | null
+    skills: string[] | null
+    date_started: string | null
+    is_active: string | null
+    ministry?: { ministry_type: string | null } | null
+}
+interface BodMembership {
+    id: number
+    date_started: string | null
+    is_active: string | null
+}
+
+const ministryInvolvements = ref<MinistryInvolvement[]>([])
+const bodMembership = ref<BodMembership | null>(null)
+const leadershipRole = ref<string | null>(null)
+
 // Testimonials
 interface Testimonial {
     id: string

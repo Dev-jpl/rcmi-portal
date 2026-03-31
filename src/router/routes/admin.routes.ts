@@ -3,7 +3,7 @@ import type { RouteRecordRaw } from 'vue-router'
 
 // Parent-level roles — anyone with admin role OR active leadership assignment can enter /admin
 // Individual routes further restrict via their own meta.roles
-const ADMIN_ROLES = ['super_admin', 'admin', 'pastoral', 'network_leader', 'lpath_leader']
+const ADMIN_ROLES = ['super_admin', 'admin', 'pastoral', 'network_leader', 'lpath_leader', 'ministry_head']
 
 export const adminRoutes: RouteRecordRaw[] = [
     {
@@ -128,6 +128,23 @@ export const adminRoutes: RouteRecordRaw[] = [
                 meta: { roles: ['super_admin', 'admin'] }
             },
             {
+                path: 'ministries',
+                meta: { roles: ['super_admin', 'admin'] },
+                children: [
+                    {
+                        path: '',
+                        name: 'admin-ministries',
+                        component: () => import('@/pages/admin/MinistriesPage.vue')
+                    },
+                    {
+                        path: ':id',
+                        name: 'admin-ministry-detail',
+                        component: () => import('@/pages/admin/MinistryDetailPage.vue'),
+                        props: true
+                    }
+                ]
+            },
+            {
                 path: 'pastoral-members',
                 name: 'admin-pastoral-members',
                 component: () => import('@/pages/admin/PastoralMembersPage.vue'),
@@ -168,6 +185,12 @@ export const adminRoutes: RouteRecordRaw[] = [
                 name: 'admin-my-lpath',
                 component: () => import('@/pages/admin/LpathDashboardPage.vue'),
                 meta: { roles: ['super_admin', 'admin', 'pastoral', 'network_leader', 'lpath_leader'] }
+            },
+            {
+                path: 'my-ministry',
+                name: 'admin-my-ministry',
+                component: () => import('@/pages/admin/MyMinistryPage.vue'),
+                meta: { roles: ['super_admin', 'admin', 'ministry_head'] }
             },
             {
                 path: 'scripture-plans',

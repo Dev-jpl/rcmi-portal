@@ -50,12 +50,14 @@ export async function roleGuard(allowedRoles: string[]) {
         if (allowedRoles.includes('pastoral') && auth.isPastor) return next()
         if (allowedRoles.includes('network_leader') && auth.isNetworkLeader) return next()
         if (allowedRoles.includes('lpath_leader') && auth.isLpathLeader) return next()
+        if (allowedRoles.includes('ministry_head') && auth.isMinistryHead) return next()
 
         // Leader without access to this specific page — redirect to their scoped page
         if (auth.hasLeadershipRole) {
             const fallback = auth.isPastor ? 'admin-my-team'
                 : auth.isNetworkLeader ? 'admin-my-network'
-                : 'admin-my-lpath'
+                : auth.isLpathLeader ? 'admin-my-lpath'
+                : 'admin-my-ministry'
             return next({ name: fallback })
         }
 
@@ -87,6 +89,7 @@ export async function guestGuard(
             if (auth.isPastor) return next({ name: 'admin-my-team' })
             if (auth.isNetworkLeader) return next({ name: 'admin-my-network' })
             if (auth.isLpathLeader) return next({ name: 'admin-my-lpath' })
+            if (auth.isMinistryHead) return next({ name: 'admin-my-ministry' })
             return next({ name: 'member-dashboard' })
         }
     }

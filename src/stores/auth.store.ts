@@ -19,6 +19,8 @@ export const useAuthStore = defineStore('auth', () => {
     const isPastor = ref(false)
     const isNetworkLeader = ref(false)
     const isLpathLeader = ref(false)
+    const isMinistryHead = ref(false)
+    const ministryHeadIds = ref<number[]>([])
 
     // ── Getters ───────────────────────────────────────────────
     const isAuthenticated = computed(() => !!session.value)
@@ -29,7 +31,7 @@ export const useAuthStore = defineStore('auth', () => {
         ['super_admin', 'admin'].includes(user.value?.role_type ?? '')
     )
     const hasLeadershipRole = computed(() =>
-        isPastor.value || isNetworkLeader.value || isLpathLeader.value
+        isPastor.value || isNetworkLeader.value || isLpathLeader.value || isMinistryHead.value
     )
     const canAccessAdmin = computed(() =>
         isAdmin.value || hasLeadershipRole.value
@@ -79,12 +81,14 @@ export const useAuthStore = defineStore('auth', () => {
             { data: pastoralData },
             { data: networkData },
             { data: lpathData },
+            { data: ministryHeadData },
         ] = await Promise.all([
             supabase.from('tbl_users').select('*').eq('id', userId).single(),
             supabase.from('tbl_members_profile').select('*').eq('user_id', userId).single(),
             supabase.from('tbl_pastoral_members').select('id').eq('user_id', userId).eq('is_active', 'Y').limit(1),
             supabase.from('tbl_network_leaders').select('id').eq('user_id', userId).eq('is_active', 'Y').limit(1),
             supabase.from('tbl_lpath_leaders').select('id').eq('user_id', userId).eq('is_active', 'Y').limit(1),
+            supabase.from('tbl_ministry_involvements').select('ministry_id').eq('user_id', userId).eq('member_type', 'head').eq('is_active', 'Y'),
         ])
 
         user.value = userData ?? null
@@ -92,6 +96,8 @@ export const useAuthStore = defineStore('auth', () => {
         isPastor.value = (pastoralData?.length ?? 0) > 0
         isNetworkLeader.value = (networkData?.length ?? 0) > 0
         isLpathLeader.value = (lpathData?.length ?? 0) > 0
+        isMinistryHead.value = (ministryHeadData?.length ?? 0) > 0
+        ministryHeadIds.value = (ministryHeadData ?? []).map((d: any) => d.ministry_id)
     }
 
     async function register(payload: {
@@ -242,6 +248,8 @@ export const useAuthStore = defineStore('auth', () => {
         isPastor.value = false
         isNetworkLeader.value = false
         isLpathLeader.value = false
+        isMinistryHead.value = false
+        ministryHeadIds.value = []
     }
 
     return {
@@ -261,6 +269,8 @@ export const useAuthStore = defineStore('auth', () => {
         isPastor,
         isNetworkLeader,
         isLpathLeader,
+        isMinistryHead,
+        ministryHeadIds,
         hasLeadershipRole,
         canAccessAdmin,
         roleType,

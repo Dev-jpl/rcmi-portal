@@ -37,7 +37,7 @@ const viewOptions = computed(() => {
 
 // Determine initial view based on current route
 const route = router.currentRoute
-if (route.value.name?.toString().startsWith('admin-my-') || route.value.name === 'admin-my-team' || route.value.name === 'admin-my-network' || route.value.name === 'admin-my-lpath') {
+if (route.value.name?.toString().startsWith('admin-my-') || route.value.name === 'admin-my-team' || route.value.name === 'admin-my-network' || route.value.name === 'admin-my-lpath' || route.value.name === 'admin-my-ministry') {
     currentView.value = 'ministry'
 } else {
     currentView.value = 'admin'
@@ -57,6 +57,7 @@ function selectView(v: ViewMode) {
         if (auth.isPastor) router.push({ name: 'admin-my-team' })
         else if (auth.isNetworkLeader) router.push({ name: 'admin-my-network' })
         else if (auth.isLpathLeader) router.push({ name: 'admin-my-lpath' })
+        else if (auth.isMinistryHead) router.push({ name: 'admin-my-ministry' })
     }
 }
 
@@ -77,6 +78,7 @@ const icons = {
     myteam: `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z"/>`,
     qrscan: `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 013.75 9.375v-4.5zM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5zM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5z"/>`,
     scripture: `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"/>`,
+    ministries: `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z"/>`,
 }
 
 interface NavItem {
@@ -108,6 +110,7 @@ const navGroups = computed<NavGroup[]>(() => {
                 { label: 'Events', to: { name: 'admin-events' }, iconKey: 'events' },
                 { label: 'Attendance', to: { name: 'admin-attendance' }, iconKey: 'attendance' },
                 { label: 'Programs', to: { name: 'admin-programs' }, iconKey: 'programs' },
+                { label: 'Ministries', to: { name: 'admin-ministries' }, iconKey: 'ministries' },
             ],
         })
         groups.push({
@@ -146,6 +149,9 @@ const navGroups = computed<NavGroup[]>(() => {
         }
         if (auth.isLpathLeader) {
             items.push({ label: 'My L-Path', to: { name: 'admin-my-lpath' }, iconKey: 'lpath' })
+        }
+        if (auth.isMinistryHead) {
+            items.push({ label: 'My Ministry', to: { name: 'admin-my-ministry' }, iconKey: 'ministries' })
         }
         if (items.length) {
             groups.push({ title: 'My Ministry', items })
