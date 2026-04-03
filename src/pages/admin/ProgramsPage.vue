@@ -56,6 +56,31 @@ const editingEnrollment = ref<Enrollment | null>(null)
 const enrollForm = ref({ user_id: '', program_id: null as number | null, date_started: '', date_ended: '', is_active: 'Y', approval_status: 'approved', remarks: '' })
 const enrollSaving = ref(false)
 
+// Member search for enrollment
+const memberSearch = ref('')
+const showMemberDropdown = ref(false)
+const availableMembers = computed(() => {
+    const q = memberSearch.value.toLowerCase()
+    const approved = admin.members.filter(m => m.status === 'approved')
+    if (!q) return approved.slice(0, 15)
+    return approved
+        .filter(m =>
+            `${m.first_name} ${m.last_name}`.toLowerCase().includes(q) ||
+            m.email?.toLowerCase().includes(q)
+        )
+        .slice(0, 15)
+})
+
+function selectMember(m: any) {
+    enrollForm.value.user_id = m.user_id
+    memberSearch.value = `${m.first_name} ${m.last_name}`
+    showMemberDropdown.value = false
+}
+
+function hideMemberDropdown() {
+    setTimeout(() => { showMemberDropdown.value = false }, 200)
+}
+
 onMounted(async () => {
     await Promise.all([fetchPrograms(), fetchEnrollments(), admin.fetchMembers()])
     loading.value = false
@@ -224,6 +249,8 @@ function openAddCompleted() {
     const now = new Date()
     const localToday = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
     enrollForm.value = { user_id: '', program_id: null, date_started: '', date_ended: localToday, is_active: 'N', approval_status: 'approved', remarks: 'Manually added — completed prior to system' }
+    memberSearch.value = ''
+    showMemberDropdown.value = false
     showEnrollModal.value = true
 }
 
@@ -232,6 +259,8 @@ function openAddEnrollment() {
     const now = new Date()
     const localToday = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
     enrollForm.value = { user_id: '', program_id: null, date_started: localToday, date_ended: '', is_active: 'Y', approval_status: 'approved', remarks: '' }
+    memberSearch.value = ''
+    showMemberDropdown.value = false
     showEnrollModal.value = true
 }
 
@@ -246,6 +275,8 @@ function openEditEnrollment(e: Enrollment) {
         approval_status: e.approval_status ?? 'approved',
         remarks: e.remarks ?? '',
     }
+    memberSearch.value = getMemberName(e.user_id)
+    showMemberDropdown.value = false
     showEnrollModal.value = true
 }
 
@@ -673,23 +704,45 @@ function getDuration(startDate: string | null, endDate: string | null) {
                             </button>
                         </div>
                         <form @submit.prevent="handleSaveEnrollment" class="space-y-4">
-                            <div>
+                            <div class="relative">
                                 <label class="block text-sm font-medium text-gray-700 mb-1">Member</label>
-                                <select
-                                    v-model="enrollForm.user_id"
-                                    required
+                                <input
+                                    v-model="memberSearch"
+                                    type="text"
+                                    placeholder="Search by name or email..."
                                     :disabled="!!editingEnrollment"
-                                    class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-navy/30 disabled:bg-gray-50 disabled:text-gray-500"
+                                    @focus="showMemberDropdown = true"
+                                    @blur="hideMemberDropdown"
+                                    required
+                                    class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-navy/30 disabled:bg-gray-50 disabled:text-gray-500"
+                                />
+
+                                <!-- Search Dropdown -->
+                                <div
+                                    v-if="showMemberDropdown"
+                                    class="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto"
                                 >
-                                    <option value="" disabled>Select member</option>
-                                    <option
-                                        v-for="m in admin.members.filter(m => m.status === 'approved')"
+                                    <div
+                                        v-for="m in availableMembers"
                                         :key="m.user_id"
-                                        :value="m.user_id"
+                                        @mousedown="selectMember(m)"
+                                        class="flex items-center gap-3 px-3 py-2 hover:bg-gray-50 cursor-pointer"
                                     >
-                                        {{ m.first_name }} {{ m.last_name }}
-                                    </option>
-                                </select>
+                                        <div class="w-8 h-8 rounded-full overflow-hidden bg-navy/5 flex items-center justify-center shrink-0">
+                                            <img v-if="m.profile_photo_url" :src="m.profile_photo_url" class="w-full h-full object-cover" />
+                                            <span v-else class="text-[10px] font-bold text-navy">
+                                                {{ m.first_name?.[0] }}{{ m.last_name?.[0] }}
+                                            </span>
+                                        </div>
+                                        <div class="min-w-0">
+                                            <p class="text-xs font-semibold text-gray-900 truncate">{{ m.first_name }} {{ m.last_name }}</p>
+                                            <p class="text-[10px] text-gray-400 truncate">{{ m.email }}</p>
+                                        </div>
+                                    </div>
+                                    <div v-if="!availableMembers.length" class="px-3 py-4 text-center text-xs text-gray-400">
+                                        No members found.
+                                    </div>
+                                </div>
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-1">Program</label>

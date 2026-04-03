@@ -24,6 +24,8 @@ const manualForm = ref({
     program_id: null as number | null,
 })
 const manualSaving = ref(false)
+const memberSearch = ref('')
+const showMemberDropdown = ref(false)
 
 // QR scanner
 const { scannedToken, scanning, error: scanError, start: startScanner, stop: stopScanner, reset: resetScanner } = useQRScanner('qr-reader')
@@ -40,7 +42,7 @@ const programs = ref<{ id: number; type: string }[]>([])
 async function fetchDefaultEvents() {
     const { data } = await supabase
         .from('lib_default_events')
-        .select('id, event_title')
+        .select('*')
         .eq('is_active', true)
         .order('event_title')
     defaultEvents.value = data ?? []
@@ -79,6 +81,67 @@ function getEventTitleForLog(id: number | null) {
 function getProgramName(id: number | null) {
     if (!id) return null
     return programs.value.find(p => p.id === id)?.type ?? null
+}
+
+const availableMembers = computed(() => {
+    const q = memberSearch.value.toLowerCase()
+    const approved = admin.members.filter(m => m.status === 'approved')
+    if (!q) return approved.slice(0, 15)
+    return approved
+        .filter(m =>
+            `${m.first_name} ${m.last_name}`.toLowerCase().includes(q) ||
+            m.email?.toLowerCase().includes(q)
+        )
+        .slice(0, 15)
+})
+
+const selectedEventData = computed(() => {
+    const logType = activeTab.value === 'manual' ? manualLogType.value : qrLogType.value
+    const id = activeTab.value === 'manual' ? manualForm.value.event_id : qrEventId.value
+
+    if (logType !== 'event' || !id) return null
+    if (id > 0) return eventStore.events.find(e => e.id === id)
+    return defaultEvents.value.find(d => d.id === -id)
+})
+
+const isCheckinStarted = computed(() => {
+    const logType = activeTab.value === 'manual' ? manualLogType.value : qrLogType.value
+    if (logType === 'program') return true
+    const event = selectedEventData.value
+    if (!event) return false
+
+    const now = new Date()
+    let checkinStart: Date
+
+    if ('duration_from' in event && event.duration_from) {
+        // Real Event
+        if ((event as any).checkin_start_at) {
+            checkinStart = new Date((event as any).checkin_start_at)
+        } else {
+            // Default to 1:00 AM on the event date
+            checkinStart = new Date(event.duration_from)
+            checkinStart.setHours(1, 0, 0, 0)
+        }
+    } else if ('default_checkin_time' in event) {
+        // Default Event template
+        const [h, m] = ((event as any).default_checkin_time || '01:00').split(':')
+        checkinStart = new Date()
+        checkinStart.setHours(parseInt(h), parseInt(m), 0, 0)
+    } else {
+        return true
+    }
+
+    return now >= checkinStart
+})
+
+function selectMember(m: any) {
+    manualForm.value.user_id = m.user_id
+    memberSearch.value = `${m.first_name} ${m.last_name}`
+    showMemberDropdown.value = false
+}
+
+function hideMemberDropdown() {
+    setTimeout(() => { showMemberDropdown.value = false }, 200)
 }
 
 onMounted(async () => {
@@ -182,6 +245,7 @@ async function handleManualCheckIn() {
     } else {
         message.value = { type: 'success', text: `${member?.first_name} ${member?.last_name} checked in.` }
         manualForm.value = { user_id: '', event_id: null, program_id: null }
+        memberSearch.value = ''
         await fetchLogs()
     }
     manualSaving.value = false
@@ -192,6 +256,13 @@ async function handleQRScan() {
     if (!scannedToken.value) return
     if (qrLogType.value === 'event' && !qrEventId.value) return
     if (qrLogType.value === 'program' && !qrProgramId.value) return
+
+    if (!isCheckinStarted.value) {
+        message.value = { type: 'error', text: 'Check-in for this event hasn\'t started yet.' }
+        resetScanner()
+        return
+    }
+
     qrProcessing.value = true
     message.value = null
 
@@ -234,6 +305,7 @@ watch(scannedToken, (val) => {
 
 async function onTabChange(tab: typeof activeTab.value) {
     activeTab.value = tab
+    message.value = null
     if (tab === 'qr') {
         await nextTick()
     } else {
@@ -294,30 +366,18 @@ function formatTime(d: string | null) {
         <div v-if="activeTab === 'manual'" class="bg-white rounded-lg border border-gray-200 p-6 max-w-lg">
             <h2 class="font-heading font-semibold text-navy mb-4">Manual Check-In</h2>
             <form @submit.prevent="handleManualCheckIn" class="space-y-4">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Member</label>
-                    <select v-model="manualForm.user_id" required
-                        class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-navy/30">
-                        <option value="" disabled>Select member</option>
-                        <option v-for="m in admin.members.filter(m => m.status === 'approved')" :key="m.user_id"
-                            :value="m.user_id">
-                            {{ m.first_name }} {{ m.last_name }}
-                        </option>
-                    </select>
-                </div>
-
                 <!-- Log Type Toggle -->
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Log For</label>
                     <div class="inline-flex gap-0.5 bg-gray-100/80 rounded-md p-0.5">
                         <button type="button" class="px-3 py-1.5 text-xs font-medium rounded transition-all"
                             :class="manualLogType === 'event' ? 'bg-white text-navy shadow-sm' : 'text-gray-400 hover:text-gray-600'"
-                            @click="manualLogType = 'event'">
+                            @click="manualLogType = 'event'; manualForm.event_id = null">
                             Event
                         </button>
                         <button type="button" class="px-3 py-1.5 text-xs font-medium rounded transition-all"
                             :class="manualLogType === 'program' ? 'bg-white text-navy shadow-sm' : 'text-gray-400 hover:text-gray-600'"
-                            @click="manualLogType = 'program'">
+                            @click="manualLogType = 'program'; manualForm.program_id = null">
                             Program
                         </button>
                     </div>
@@ -347,7 +407,64 @@ function formatTime(d: string | null) {
                     </select>
                 </div>
 
-                <button type="submit" :disabled="manualSaving"
+                <!-- Member Search (Searchable) -->
+                <div v-if="(manualLogType === 'event' && manualForm.event_id) || (manualLogType === 'program' && manualForm.program_id)" class="relative">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Member</label>
+
+                    <div v-if="manualLogType === 'event' && !isCheckinStarted" class="p-4 bg-amber-50 border border-amber-200 rounded-xl mb-4 flex items-start gap-3">
+                        <div class="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center shrink-0">
+                            <svg class="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                        </div>
+                        <div>
+                            <p class="text-sm font-semibold text-amber-800">Check-in not yet started</p>
+                            <p class="text-[11px] text-amber-700/80 mt-0.5">Please wait until the designated check-in time for this event.</p>
+                        </div>
+                    </div>
+
+                    <template v-else>
+                        <div class="relative">
+                            <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                                <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                </svg>
+                            </div>
+                            <input v-model="memberSearch" type="text" placeholder="Search member to check in..."
+                                @focus="showMemberDropdown = true" @blur="hideMemberDropdown"
+                                class="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-4 focus:ring-navy/5 focus:border-navy transition-all" />
+                        </div>
+
+                        <!-- Search Dropdown -->
+                        <div v-if="showMemberDropdown"
+                            class="absolute z-20 w-full mt-2 bg-white border border-gray-100 rounded-xl shadow-2xl overflow-hidden py-1">
+                            <div class="px-3 py-2 border-b border-gray-50 bg-gray-50/50">
+                                <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Available Members</span>
+                            </div>
+                            <div class="max-h-64 overflow-y-auto">
+                                <div v-for="m in availableMembers" :key="m.user_id"
+                                    @mousedown="selectMember(m)"
+                                    class="flex items-center gap-3 px-3 py-2.5 hover:bg-navy/5 cursor-pointer transition-colors group">
+                                    <div class="w-9 h-9 rounded-full overflow-hidden bg-navy/5 flex items-center justify-center shrink-0 border-2 border-white group-hover:border-navy/10">
+                                        <img v-if="m.profile_photo_url" :src="m.profile_photo_url" class="w-full h-full object-cover" />
+                                        <div v-else class="w-full h-full flex items-center justify-center bg-gradient-to-br from-navy/10 to-navy/5">
+                                            <span class="text-xs font-bold text-navy/40">{{ m.first_name?.[0] }}{{ m.last_name?.[0] }}</span>
+                                        </div>
+                                    </div>
+                                    <div class="min-w-0">
+                                        <p class="text-sm font-semibold text-gray-900 truncate">{{ m.first_name }} {{ m.last_name }}</p>
+                                        <p class="text-[11px] text-gray-400 truncate">{{ m.email }}</p>
+                                    </div>
+                                </div>
+                                <div v-if="!availableMembers.length" class="px-3 py-8 text-center">
+                                    <p class="text-xs text-gray-400">No members found matching your search</p>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+
+                <button type="submit" :disabled="manualSaving || !isCheckinStarted || !manualForm.user_id"
                     class="w-full py-2.5 bg-navy text-white font-semibold rounded-lg hover:bg-navy-700 disabled:opacity-50 transition-colors">
                     {{ manualSaving ? 'Checking in...' : 'Check In' }}
                 </button>

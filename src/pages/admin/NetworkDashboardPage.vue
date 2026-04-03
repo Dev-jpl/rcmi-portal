@@ -2,10 +2,12 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/auth.store'
+import { useAdminStore } from '@/stores/admin.store'
 import LeadershipGraph from '@/components/common/LeadershipGraph.vue'
 import type { Node, Edge } from '@vue-flow/core'
 
 const auth = useAuthStore()
+const admin = useAdminStore()
 const currentUserId = computed(() => auth.user?.id ?? '')
 const isScopedView = computed(() => auth.isNetworkLeader && !auth.isAdmin)
 
@@ -26,6 +28,16 @@ interface LpathMember {
 }
 interface Church { id: number; church_name: string }
 
+interface MemberProfile {
+    user_id: string
+    first_name: string | null
+    last_name: string | null
+    email: string | null
+    profile_photo_url: string | null
+    status?: string | null
+    satellite_church_id?: number | null
+}
+
 const activeTab = ref<'lpath-leaders' | 'lpath-members' | 'hierarchy'>('lpath-leaders')
 const loading = ref(true)
 const search = ref('')
@@ -40,11 +52,13 @@ const churches = ref<Church[]>([])
 // Assign modal
 const showAssignModal = ref(false)
 const assignSaving = ref(false)
-const allMembers = ref<{ user_id: string; first_name: string | null; last_name: string | null; satellite_church_id: number | null }[]>([])
+const memberSearch = ref('')
+const showMemberDropdown = ref(false)
+// allMembers replaced by admin.members
 const assignForm = ref({ user_id: '', date_started: new Date().toISOString().split('T')[0] })
 
 onMounted(async () => {
-    await Promise.all([fetchChurches(), fetchAllMembers()])
+    await Promise.all([fetchChurches(), admin.fetchMembers()])
     if (isScopedView.value) {
         const { data } = await supabase
             .from('tbl_network_leaders')
@@ -59,30 +73,44 @@ onMounted(async () => {
             .select('id, user_id, user:tbl_users!tbl_network_leaders_user_id_fkey(first_name, last_name)')
             .eq('is_active', 'Y')
         networkLeadersList.value = (data as NetworkLeaderOption[]) ?? []
-        if (networkLeadersList.value.length) selectedNetworkId.value = networkLeadersList.value[0].id
+        if (networkLeadersList.value.length > 0) selectedNetworkId.value = networkLeadersList.value[0]?.id ?? null
     }
     await fetchAll()
     loading.value = false
 })
 
-async function fetchAllMembers() {
-    const { data } = await supabase
-        .from('tbl_members_profile')
-        .select('user_id, first_name, last_name, satellite_church_id')
-        .eq('status', 'approved')
-        .order('first_name')
-    allMembers.value = data ?? []
-}
+// fetchAllMembers no longer needed
 
 function openAssignModal() {
     assignForm.value = { user_id: '', date_started: new Date().toISOString().split('T')[0] }
+    memberSearch.value = ''
+    showMemberDropdown.value = false
     showAssignModal.value = true
 }
 
 const availableMembers = computed(() => {
+    const q = memberSearch.value.toLowerCase()
     const existingIds = new Set(lpathLeaders.value.map(l => l.user_id))
-    return allMembers.value.filter(m => !existingIds.has(m.user_id))
+    const approved = (admin.members as MemberProfile[]).filter((m: MemberProfile) => m.status === 'approved' && !existingIds.has(m.user_id))
+
+    if (!q) return approved.slice(0, 15)
+    return approved
+        .filter((m: MemberProfile) =>
+            `${m.first_name} ${m.last_name}`.toLowerCase().includes(q) ||
+            m.email?.toLowerCase().includes(q)
+        )
+        .slice(0, 15)
 })
+
+function selectMember(m: MemberProfile) {
+    assignForm.value.user_id = m.user_id
+    memberSearch.value = `${m.first_name} ${m.last_name}`
+    showMemberDropdown.value = false
+}
+
+function hideMemberDropdown() {
+    setTimeout(() => { showMemberDropdown.value = false }, 200)
+}
 
 function getSelectedNetworkLeaderName() {
     const nl = networkLeadersList.value.find(n => n.id === selectedNetworkId.value)
@@ -94,7 +122,7 @@ async function handleAssign() {
     assignSaving.value = true
     message.value = null
 
-    const member = allMembers.value.find(m => m.user_id === assignForm.value.user_id)
+    const member = (admin.members as MemberProfile[]).find(m => m.user_id === assignForm.value.user_id)
     const networkName = getSelectedNetworkLeaderName()
 
     const { error } = await supabase.from('tbl_lpath_leaders').insert({
@@ -398,18 +426,43 @@ const tabs = [
                             </button>
                         </div>
                         <form @submit.prevent="handleAssign" class="space-y-4">
-                            <div>
+                            <div class="relative">
                                 <label class="block text-sm font-medium text-gray-700 mb-1">Member</label>
-                                <select
-                                    v-model="assignForm.user_id"
-                                    required
+                                <input
+                                    v-model="memberSearch"
+                                    type="text"
+                                    placeholder="Search members..."
+                                    @focus="showMemberDropdown = true"
+                                    @blur="hideMemberDropdown"
                                     class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-navy/30"
+                                />
+
+                                <!-- Search Dropdown -->
+                                <div
+                                    v-if="showMemberDropdown"
+                                    class="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto"
                                 >
-                                    <option value="" disabled>Select member</option>
-                                    <option v-for="m in availableMembers" :key="m.user_id" :value="m.user_id">
-                                        {{ m.first_name }} {{ m.last_name }}
-                                    </option>
-                                </select>
+                                    <div
+                                        v-for="m in availableMembers"
+                                        :key="m.user_id"
+                                        @mousedown="selectMember(m)"
+                                        class="flex items-center gap-3 px-3 py-2 hover:bg-gray-50 cursor-pointer"
+                                    >
+                                        <div class="w-8 h-8 rounded-full overflow-hidden bg-navy/5 flex items-center justify-center shrink-0">
+                                            <img v-if="m.profile_photo_url" :src="m.profile_photo_url" class="w-full h-full object-cover" />
+                                            <span v-else class="text-[10px] font-bold text-navy">
+                                                {{ m.first_name?.[0] }}{{ m.last_name?.[0] }}
+                                            </span>
+                                        </div>
+                                        <div class="min-w-0">
+                                            <p class="text-xs font-semibold text-gray-900 truncate">{{ m.first_name }} {{ m.last_name }}</p>
+                                            <p class="text-[10px] text-gray-400 truncate">{{ m.email }}</p>
+                                        </div>
+                                    </div>
+                                    <div v-if="!availableMembers.length" class="px-3 py-4 text-center text-xs text-gray-400">
+                                        No members found.
+                                    </div>
+                                </div>
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-1">Date Started</label>

@@ -8,9 +8,7 @@
             <div class="absolute inset-0 bg-gradient-to-br from-navy-900 via-navy to-navy-700" />
             <div class="absolute inset-0 opacity-[0.03]" style="background-image: radial-gradient(circle at 20% 50%, white 1px, transparent 1px); background-size: 28px 28px;" />
             <div class="relative z-10 px-12 text-center">
-                <div class="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gold shadow-xl shadow-gold/20 mb-8">
-                    <span class="text-navy font-heading font-extrabold text-3xl">R</span>
-                </div>
+                <img src="@/assets/img/logos/rcmi-logo.png" alt="RCMI" class="w-20 h-20 mx-auto mb-8" />
                 <h1 class="text-3xl font-heading font-bold text-white mb-3">RCMI Portal</h1>
                 <p class="text-white/40 text-sm leading-relaxed max-w-xs mx-auto">
                     Reach &middot; Connect &middot; Mobilize &middot; Inspire

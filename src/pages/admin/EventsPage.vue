@@ -15,6 +15,7 @@ interface DefaultEvent {
     day_of_week: string
     default_start_time: string
     default_end_time: string
+    default_checkin_time: string | null
     allow_self_checkin: boolean
     is_active: boolean
     created_at: string
@@ -51,6 +52,9 @@ function getEventDefaults() {
         event_type: '',
         duration_from: '',
         duration_to: '',
+        checkin_start_at: '',
+        specify_checkin_time: false,
+        checkin_time: '01:00',
         satellite_church_id: auth.profile?.satellite_church_id ?? null,
         remarks: '',
         is_active: true,
@@ -74,6 +78,7 @@ function getDefaultEventDefaults() {
         day_of_week: 'Sunday',
         default_start_time: '09:00',
         default_end_time: '11:00',
+        default_checkin_time: '01:00',
         allow_self_checkin: true,
         is_active: true,
     }
@@ -113,11 +118,27 @@ function openAddEvent() {
 
 function openEditEvent(event: Event) {
     editingEvent.value = event
+    const checkinAt = (event as any).checkin_start_at
+    let specifyTime = false
+    let checkinTime = '01:00'
+
+    if (checkinAt) {
+        const dt = new Date(checkinAt)
+        // If it's not exactly 1:00 AM, or if we want to show what was saved
+        checkinTime = dt.toTimeString().slice(0, 5)
+        // Heuristic: if it's 1:00 AM, maybe they didn't "specify" it, but let's be safe
+        // Actually, if checkinAt exists, we can just show it.
+        specifyTime = true 
+    }
+
     form.value = {
         event_title: event.event_title,
         event_type: event.event_type ?? '',
         duration_from: event.duration_from?.slice(0, 16) ?? '',
         duration_to: event.duration_to?.slice(0, 16) ?? '',
+        checkin_start_at: checkinAt?.slice(0, 16) ?? '',
+        specify_checkin_time: specifyTime,
+        checkin_time: checkinTime,
         satellite_church_id: event.satellite_church_id,
         remarks: event.remarks ?? '',
         is_active: event.is_active ?? true,
@@ -132,11 +153,19 @@ async function handleSaveEvent() {
     saving.value = true
     error.value = null
 
+    let finalCheckinAt = null
+    if (form.value.duration_from) {
+        const datePart = form.value.duration_from.split('T')[0]
+        const timePart = form.value.specify_checkin_time ? form.value.checkin_time : '01:00'
+        finalCheckinAt = `${datePart}T${timePart}:00`
+    }
+
     const payload = {
         event_title: form.value.event_title,
         event_type: form.value.event_type || null,
         duration_from: form.value.duration_from || null,
         duration_to: form.value.duration_to || null,
+        checkin_start_at: finalCheckinAt,
         satellite_church_id: form.value.satellite_church_id,
         remarks: form.value.remarks || null,
         is_active: form.value.is_active,
@@ -219,6 +248,7 @@ function openEditDefault(item: DefaultEvent) {
         day_of_week: item.day_of_week ?? 'Sunday',
         default_start_time: item.default_start_time ?? '09:00',
         default_end_time: item.default_end_time ?? '11:00',
+        default_checkin_time: item.default_checkin_time ?? '01:00',
         allow_self_checkin: item.allow_self_checkin ?? true,
         is_active: item.is_active ?? true,
     }
@@ -238,6 +268,7 @@ async function handleSaveDefault() {
             day_of_week: defaultForm.value.day_of_week,
             default_start_time: defaultForm.value.default_start_time || null,
             default_end_time: defaultForm.value.default_end_time || null,
+            default_checkin_time: defaultForm.value.default_checkin_time,
             allow_self_checkin: defaultForm.value.allow_self_checkin,
             is_active: defaultForm.value.is_active,
         }
@@ -623,6 +654,16 @@ function formatTime(t: string | null) {
                             </div>
                         </div>
                         <div>
+                            <label class="flex items-center gap-2 mb-2 cursor-pointer">
+                                <input v-model="form.specify_checkin_time" type="checkbox" class="w-4 h-4 rounded border-gray-300 text-navy focus:ring-navy" />
+                                <span class="text-sm font-medium text-gray-700">Specify Check-In Start Time</span>
+                            </label>
+                            <div v-if="form.specify_checkin_time" class="pl-6">
+                                <input v-model="form.checkin_time" type="time" class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-navy/20 focus:border-navy" />
+                            </div>
+                            <p v-else class="text-[10px] text-gray-400 pl-6">By default, check-in starts at 1:00 AM on the event date.</p>
+                        </div>
+                        <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Remarks</label>
                             <textarea v-model="form.remarks" rows="2" class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-navy/20 resize-none" />
                         </div>
@@ -684,7 +725,7 @@ function formatTime(t: string | null) {
                                     <option v-for="d in daysOfWeek" :key="d" :value="d">{{ d }}</option>
                                 </select>
                             </div>
-                            <div class="grid grid-cols-2 gap-3">
+                            <div class="grid grid-cols-3 gap-3">
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-1">Start Time</label>
                                     <input v-model="defaultForm.default_start_time" type="time" class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-navy/20 focus:border-navy" />
@@ -692,6 +733,10 @@ function formatTime(t: string | null) {
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-1">End Time</label>
                                     <input v-model="defaultForm.default_end_time" type="time" class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-navy/20 focus:border-navy" />
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Check-In</label>
+                                    <input v-model="defaultForm.default_checkin_time" type="time" class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-navy/20 focus:border-navy" />
                                 </div>
                             </div>
                             <div class="flex items-center gap-6">

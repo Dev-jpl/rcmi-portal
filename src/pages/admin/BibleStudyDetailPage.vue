@@ -31,7 +31,37 @@ const attendanceLoading = ref(false)
 const logTab = ref<'registered' | 'guest'>('registered')
 const regMemberId = ref('')
 const guestName = ref('')
+const guestEmail = ref('')
+const guestPhone = ref('')
 const addingLog = ref(false)
+
+// Member search for attendance
+const memberSearch = ref('')
+const showMemberDropdown = ref(false)
+const availableMembers = computed(() => {
+  const q = memberSearch.value.toLowerCase()
+  const approved = admin.members.filter((m) => m.status === 'approved')
+  if (!q) return approved.slice(0, 15)
+  return approved
+    .filter(
+      (m) =>
+        `${m.first_name} ${m.last_name}`.toLowerCase().includes(q) ||
+        m.email?.toLowerCase().includes(q),
+    )
+    .slice(0, 15)
+})
+
+function selectMember(m: any) {
+  regMemberId.value = m.user_id
+  memberSearch.value = `${m.first_name} ${m.last_name}`
+  showMemberDropdown.value = false
+}
+
+function hideMemberDropdown() {
+  setTimeout(() => {
+    showMemberDropdown.value = false
+  }, 200)
+}
 
 onMounted(async () => {
   await Promise.all([fetchChurches(), admin.fetchMembers(), fetchStudyDetails()])
@@ -224,6 +254,8 @@ async function logAttendance() {
     session_id: activeSessionId.value,
     user_id: logTab.value === 'registered' ? regMemberId.value : null,
     guest_name: logTab.value === 'guest' ? guestName.value.trim() : null,
+    guest_email: logTab.value === 'guest' ? guestEmail.value.trim() : null,
+    guest_contact: logTab.value === 'guest' ? guestPhone.value.trim() : null,
   }
 
   const { error } = await supabase.from('tbl_bible_study_attendance').insert(payload)
@@ -233,7 +265,10 @@ async function logAttendance() {
   } else {
     message.value = { type: 'success', text: 'Attendance logged.' }
     regMemberId.value = ''
+    memberSearch.value = ''
     guestName.value = ''
+    guestEmail.value = ''
+    guestPhone.value = ''
     await fetchAttendance()
   }
 
@@ -403,32 +438,84 @@ async function removeAttendance(id: number) {
           </div>
 
           <form @submit.prevent="logAttendance" class="space-y-4">
-            <div v-if="logTab === 'registered'">
-              <label class="block text-xs font-medium text-gray-500 mb-1"
-                >Select Portal Member</label
-              >
-              <select
-                v-model="regMemberId"
-                class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-navy/30"
-              >
-                <option value="" disabled>Search member...</option>
-                <option
-                  v-for="m in admin.members.filter((m) => m.status === 'approved')"
-                  :key="m.user_id"
-                  :value="m.user_id"
-                >
-                  {{ m.first_name }} {{ m.last_name }}
-                </option>
-              </select>
-            </div>
-            <div v-else>
-              <label class="block text-xs font-medium text-gray-500 mb-1">Guest Full Name</label>
+            <div v-if="logTab === 'registered'" class="relative">
+              <label class="block text-xs font-medium text-gray-500 mb-1">Select Portal Member</label>
               <input
-                v-model="guestName"
+                v-model="memberSearch"
                 type="text"
-                placeholder="e.g. John Doe"
-                class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-navy/30"
+                placeholder="Search by name or email..."
+                @focus="showMemberDropdown = true"
+                @blur="hideMemberDropdown"
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-navy/30"
               />
+
+              <!-- Search Dropdown -->
+              <div
+                v-if="showMemberDropdown"
+                class="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto"
+              >
+                <div
+                  v-for="m in availableMembers"
+                  :key="m.user_id"
+                  @mousedown="selectMember(m)"
+                  class="flex items-center gap-3 px-3 py-2 hover:bg-gray-50 cursor-pointer"
+                >
+                  <div
+                    class="w-8 h-8 rounded-full overflow-hidden bg-navy/5 flex items-center justify-center shrink-0"
+                  >
+                    <img
+                      v-if="m.profile_photo_url"
+                      :src="m.profile_photo_url"
+                      class="w-full h-full object-cover"
+                    />
+                    <span v-else class="text-[10px] font-bold text-navy">
+                      {{ m.first_name?.[0] }}{{ m.last_name?.[0] }}
+                    </span>
+                  </div>
+                  <div class="min-w-0">
+                    <p class="text-xs font-semibold text-gray-900 truncate">
+                      {{ m.first_name }} {{ m.last_name }}
+                    </p>
+                    <p class="text-[10px] text-gray-400 truncate">{{ m.email }}</p>
+                  </div>
+                </div>
+                <div v-if="!availableMembers.length" class="px-3 py-4 text-center text-xs text-gray-400">
+                  No members found.
+                </div>
+              </div>
+            </div>
+            <div v-else class="space-y-3">
+              <div>
+                <label class="block text-xs font-medium text-gray-500 mb-1">Guest Full Name</label>
+                <input
+                  v-model="guestName"
+                  type="text"
+                  placeholder="e.g. John Doe"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-navy/30"
+                />
+              </div>
+              <div class="grid grid-cols-2 gap-2">
+                <div>
+                  <label class="block text-xs font-medium text-gray-500 mb-1">Email (Optional)</label>
+                  <input
+                    v-model="guestEmail"
+                    type="email"
+                    placeholder="john@example.com"
+                    class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-navy/30"
+                  />
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-gray-500 mb-1"
+                    >Phone (Optional)</label
+                  >
+                  <input
+                    v-model="guestPhone"
+                    type="text"
+                    placeholder="0917..."
+                    class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-navy/30"
+                  />
+                </div>
+              </div>
             </div>
 
             <button
@@ -466,21 +553,7 @@ async function removeAttendance(id: number) {
               :key="a.id"
               class="p-3 flex items-center justify-between hover:bg-gray-50"
             >
-              <div class="flex items-center gap-3">
-                <span
-                  v-if="a.user_id"
-                  class="px-2 py-0.5 bg-blue-50 text-blue-700 text-[10px] font-bold rounded uppercase tracking-wider"
-                  >Member</span
-                >
-                <span
-                  v-else
-                  class="px-2 py-0.5 bg-gray-100 text-gray-600 text-[10px] font-bold rounded uppercase tracking-wider"
-                  >Guest</span
-                >
-                <p class="text-sm font-medium text-gray-900">
-                  {{ a.user_id ? getMemberName(a.user_id) : a.guest_name }}
-                </p>
-              </div>
+
               <div class="flex items-center gap-4">
                 <span class="text-xs text-gray-400">{{
                   new Date(a.logged_at).toLocaleTimeString([], {

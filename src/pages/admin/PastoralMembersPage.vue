@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { supabase } from '@/lib/supabase'
+import { useAdminStore } from '@/stores/admin.store'
+
+const admin = useAdminStore()
 
 interface PastoralMember {
     id: number
@@ -12,11 +15,13 @@ interface PastoralMember {
     user?: { id: string; first_name: string | null; last_name: string | null; email: string }
 }
 
-interface UserOption {
-    id: string
+interface MemberProfile {
+    user_id: string
     first_name: string | null
     last_name: string | null
-    email: string
+    email: string | null
+    profile_photo_url: string | null
+    status?: string | null
 }
 
 interface Church {
@@ -25,7 +30,6 @@ interface Church {
 }
 
 const members = ref<PastoralMember[]>([])
-const users = ref<UserOption[]>([])
 const churches = ref<Church[]>([])
 const loading = ref(true)
 const search = ref('')
@@ -42,8 +46,35 @@ const form = ref({
     is_active: 'Y',
 })
 
+// Member search for enrollment
+const memberSearch = ref('')
+const showMemberDropdown = ref(false)
+const availableUsers = computed(() => {
+    const q = memberSearch.value.toLowerCase()
+    const existingIds = new Set(members.value.filter(m => m.is_active === 'Y' && m.id !== editingId.value).map(m => m.user_id))
+    const approved = (admin.members as any[]).filter((m: MemberProfile) => m.status === 'approved' && !existingIds.has(m.user_id))
+
+    if (!q) return approved.slice(0, 15)
+    return approved
+        .filter((m: MemberProfile) =>
+            `${m.first_name} ${m.last_name}`.toLowerCase().includes(q) ||
+            m.email?.toLowerCase().includes(q)
+        )
+        .slice(0, 15)
+})
+
+function selectUser(m: MemberProfile) {
+    form.value.user_id = m.user_id
+    memberSearch.value = `${m.first_name} ${m.last_name}`
+    showMemberDropdown.value = false
+}
+
+function hideUserDropdown() {
+    setTimeout(() => { showMemberDropdown.value = false }, 200)
+}
+
 onMounted(async () => {
-    await Promise.all([fetchMembers(), fetchUsers(), fetchChurches()])
+    await Promise.all([fetchMembers(), admin.fetchMembers(), fetchChurches()])
     loading.value = false
 })
 
@@ -53,15 +84,6 @@ async function fetchMembers() {
         .select('*, user:tbl_users!tbl_pastoral_members_user_id_fkey(id, first_name, last_name, email)')
         .order('created_at', { ascending: false })
     members.value = (data as PastoralMember[]) ?? []
-}
-
-async function fetchUsers() {
-    const { data } = await supabase
-        .from('tbl_users')
-        .select('id, first_name, last_name, email')
-        .eq('is_active', 'Y')
-        .order('first_name')
-    users.value = data ?? []
 }
 
 async function fetchChurches() {
@@ -88,14 +110,16 @@ const filtered = computed(() => {
     return list
 })
 
-const availableUsers = computed(() => {
-    const existingIds = new Set(members.value.filter(m => m.is_active === 'Y' && m.id !== editingId.value).map(m => m.user_id))
-    return users.value.filter(u => !existingIds.has(u.id))
-})
+function getMemberName(userId: string) {
+    const m = admin.members.find(m => m.user_id === userId)
+    return m ? `${m.first_name} ${m.last_name}` : '—'
+}
 
 function openAdd() {
     editingId.value = null
     form.value = { user_id: '', church_id: null, date_started: new Date().toISOString().split('T')[0], is_active: 'Y' }
+    memberSearch.value = ''
+    showMemberDropdown.value = false
     showModal.value = true
 }
 
@@ -107,6 +131,8 @@ function openEdit(m: PastoralMember) {
         date_started: m.date_started ?? '',
         is_active: m.is_active ?? 'Y',
     }
+    memberSearch.value = userName(m.user) || getMemberName(m.user_id)
+    showMemberDropdown.value = false
     showModal.value = true
 }
 
@@ -272,18 +298,44 @@ function churchName(churchId: number | null) {
                         {{ editingId ? 'Edit' : 'Add' }} Pastor
                     </h3>
                     <div class="space-y-4">
-                        <div>
+                        <div class="relative">
                             <label class="block text-sm font-medium text-gray-700 mb-1">Member</label>
-                            <select
-                                v-model="form.user_id"
-                                class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-navy/30"
+                            <input
+                                v-model="memberSearch"
+                                type="text"
+                                placeholder="Search by name or email..."
                                 :disabled="!!editingId"
+                                @focus="showMemberDropdown = true"
+                                @blur="hideUserDropdown"
+                                class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-navy/30 disabled:bg-gray-50"
+                            />
+
+                            <!-- Search Dropdown -->
+                            <div
+                                v-if="showMemberDropdown"
+                                class="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto"
                             >
-                                <option value="">Select a member...</option>
-                                <option v-for="u in availableUsers" :key="u.id" :value="u.id">
-                                    {{ u.first_name }} {{ u.last_name }} ({{ u.email }})
-                                </option>
-                            </select>
+                                <div
+                                    v-for="m in availableUsers"
+                                    :key="m.user_id"
+                                    @mousedown="selectUser(m)"
+                                    class="flex items-center gap-3 px-3 py-2 hover:bg-gray-50 cursor-pointer"
+                                >
+                                    <div class="w-8 h-8 rounded-full overflow-hidden bg-navy/5 flex items-center justify-center shrink-0">
+                                        <img v-if="m.profile_photo_url" :src="m.profile_photo_url" class="w-full h-full object-cover" />
+                                        <span v-else class="text-[10px] font-bold text-navy">
+                                            {{ m.first_name?.[0] }}{{ m.last_name?.[0] }}
+                                        </span>
+                                    </div>
+                                    <div class="min-w-0">
+                                        <p class="text-xs font-semibold text-gray-900 truncate">{{ m.first_name }} {{ m.last_name }}</p>
+                                        <p class="text-[10px] text-gray-400 truncate">{{ m.email }}</p>
+                                    </div>
+                                </div>
+                                <div v-if="!availableUsers.length" class="px-3 py-4 text-center text-xs text-gray-400">
+                                    No members found.
+                                </div>
+                            </div>
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Church</label>

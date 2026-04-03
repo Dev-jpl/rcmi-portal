@@ -107,6 +107,7 @@ async function handleLogin() {
 <template>
     <div>
         <div class="text-center mb-7">
+            <img src="@/assets/img/logos/rcmi-logo-with-dark-text.png" alt="RCMI" class="h-16 mx-auto mb-4" />
             <h2 class="text-2xl font-heading font-bold text-navy mb-1">Welcome back</h2>
             <p class="text-sm text-gray-400">Sign in to your RCMI account to continue</p>
         </div>

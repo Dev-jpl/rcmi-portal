@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/auth.store'
 import { useAttendanceStore } from '@/stores/attendance.store'
@@ -71,6 +71,20 @@ async function handleCheckIn(event: Event) {
     checkingIn.value = null
 }
 
+const now = ref(new Date())
+let nowTimer: ReturnType<typeof setInterval>
+
+onMounted(() => {
+    nowTimer = setInterval(() => { now.value = new Date() }, 30_000) // update every 30s
+})
+
+onUnmounted(() => clearInterval(nowTimer))
+
+function hasStarted(event: Event): boolean {
+    if (!event.duration_from) return true
+    return now.value >= new Date(event.duration_from)
+}
+
 function formatTime(d: string | null) {
     if (!d) return ''
     return new Date(d).toLocaleTimeString('en', { hour: 'numeric', minute: '2-digit' })
@@ -130,14 +144,21 @@ function formatTime(d: string | null) {
                 </div>
 
                 <!-- Check-in button -->
-                <button
-                    v-else
-                    :disabled="checkingIn === event.id"
-                    class="mt-4 w-full py-3 bg-navy text-white font-semibold rounded-lg hover:bg-navy-700 disabled:opacity-50 transition-colors text-sm"
-                    @click="handleCheckIn(event)"
-                >
-                    {{ checkingIn === event.id ? 'Checking in...' : 'Check In Now' }}
-                </button>
+                <div v-else class="mt-4">
+                    <button
+                        :disabled="checkingIn === event.id || !hasStarted(event)"
+                        class="w-full py-3 font-semibold rounded-lg transition-colors text-sm"
+                        :class="hasStarted(event)
+                            ? 'bg-navy text-white hover:bg-navy-700 disabled:opacity-50'
+                            : 'bg-gray-100 text-gray-400 cursor-not-allowed'"
+                        @click="handleCheckIn(event)"
+                    >
+                        {{ checkingIn === event.id ? 'Checking in...' : hasStarted(event) ? 'Check In Now' : 'Not Yet Started' }}
+                    </button>
+                    <p v-if="!hasStarted(event)" class="text-xs text-gray-400 text-center mt-1.5">
+                        Check-in opens at {{ formatTime(event.duration_from) }}
+                    </p>
+                </div>
 
                 <!-- Message -->
                 <p

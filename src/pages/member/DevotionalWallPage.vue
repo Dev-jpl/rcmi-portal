@@ -32,6 +32,7 @@ const auth = useAuthStore()
 const devotionals = ref<Devotional[]>([])
 const reactions = ref<Map<string, ReactionCount[]>>(new Map())
 const comments = ref<Map<string, Comment[]>>(new Map())
+const avatarMap = ref<Map<string, string | null>>(new Map())
 const newContent = ref('')
 const posting = ref(false)
 const loading = ref(true)
@@ -85,8 +86,32 @@ async function fetchDevotionals() {
     devotionals.value = data ?? []
     if (devotionals.value.length) {
         await Promise.all([fetchReactions(), fetchComments()])
+        await fetchAvatars()
     }
     loading.value = false
+}
+
+async function fetchAvatars() {
+    const devUserIds = devotionals.value.map((d) => d.user_id)
+    const commentUserIds: string[] = []
+    comments.value.forEach((list) => list.forEach((c) => commentUserIds.push(c.user_id)))
+    const allIds = [...new Set([...devUserIds, ...commentUserIds])]
+    if (!allIds.length) return
+
+    const { data } = await supabase
+        .from('tbl_members_profile')
+        .select('user_id, profile_photo_url')
+        .in('user_id', allIds)
+
+    const map = new Map<string, string | null>()
+    for (const row of data ?? []) {
+        map.set(row.user_id, row.profile_photo_url ?? null)
+    }
+    avatarMap.value = map
+}
+
+function getAvatar(userId: string): string | null {
+    return avatarMap.value.get(userId) ?? null
 }
 
 async function fetchReactions() {
@@ -376,8 +401,9 @@ onUnmounted(() => {
                 class="bg-white rounded-xl border border-gray-200 p-4"
             >
                 <div class="flex items-center gap-3 mb-2">
-                    <div class="w-8 h-8 rounded-full bg-navy/10 flex items-center justify-center text-navy text-xs font-bold">
-                        {{ item.author_name?.[0] ?? '?' }}
+                    <div class="w-8 h-8 rounded-full overflow-hidden shrink-0 bg-navy/10 flex items-center justify-center text-navy text-xs font-bold">
+                        <img v-if="getAvatar(item.user_id)" :src="getAvatar(item.user_id)!" class="w-full h-full object-cover" />
+                        <span v-else>{{ item.author_name?.[0] ?? '?' }}</span>
                     </div>
                     <div class="flex-1 min-w-0">
                         <p class="text-sm font-medium text-gray-900">{{ item.author_name }}</p>
@@ -452,8 +478,9 @@ onUnmounted(() => {
                             :key="c.id"
                             class="flex gap-2.5"
                         >
-                            <div class="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-[10px] font-bold text-gray-500 shrink-0 mt-0.5">
-                                {{ c.author_name?.[0] ?? '?' }}
+                            <div class="w-6 h-6 rounded-full overflow-hidden shrink-0 mt-0.5 bg-gray-100 flex items-center justify-center text-[10px] font-bold text-gray-500">
+                                <img v-if="getAvatar(c.user_id)" :src="getAvatar(c.user_id)!" class="w-full h-full object-cover" />
+                                <span v-else>{{ c.author_name?.[0] ?? '?' }}</span>
                             </div>
                             <div class="flex-1 min-w-0">
                                 <!-- Editing comment -->
@@ -491,8 +518,9 @@ onUnmounted(() => {
 
                     <!-- Comment input -->
                     <div v-if="auth.isApproved" class="flex gap-2">
-                        <div class="w-6 h-6 rounded-full bg-navy/10 flex items-center justify-center text-[10px] font-bold text-navy shrink-0 mt-1">
-                            {{ (auth.user?.first_name?.[0] ?? '') + (auth.user?.last_name?.[0] ?? '') }}
+                        <div class="w-6 h-6 rounded-full overflow-hidden shrink-0 mt-1 bg-navy/10 flex items-center justify-center text-[10px] font-bold text-navy">
+                            <img v-if="auth.profile?.profile_photo_url" :src="auth.profile.profile_photo_url" class="w-full h-full object-cover" />
+                            <span v-else>{{ (auth.user?.first_name?.[0] ?? '') + (auth.user?.last_name?.[0] ?? '') }}</span>
                         </div>
                         <div class="flex-1 flex gap-2">
                             <input

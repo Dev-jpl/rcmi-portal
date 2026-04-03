@@ -30,9 +30,7 @@ const layout = computed(() => {
     <!-- Show nothing until session is resolved to prevent login flash -->
     <div v-if="!ready" class="min-h-screen flex items-center justify-center bg-gray-50">
         <div class="text-center">
-            <div class="w-10 h-10 rounded-xl bg-gold flex items-center justify-center shadow-lg shadow-gold/20 mx-auto mb-3">
-                <span class="text-navy font-heading font-extrabold text-sm">R</span>
-            </div>
+            <img src="@/assets/img/logos/rcmi-logo.png" alt="RCMI" class="w-12 h-12 mx-auto mb-3" />
             <div class="w-5 h-5 border-2 border-navy/20 border-t-navy rounded-full animate-spin mx-auto" />
         </div>
     </div>

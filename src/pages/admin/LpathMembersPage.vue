@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { supabase } from '@/lib/supabase'
+import { useAdminStore } from '@/stores/admin.store'
+
+const admin = useAdminStore()
 
 interface LpathMember {
     id: number
@@ -16,13 +19,20 @@ interface LpathMember {
     user?: { id: string; first_name: string | null; last_name: string | null; email: string }
 }
 
-interface UserOption { id: string; first_name: string | null; last_name: string | null; email: string }
+interface MemberProfile {
+    user_id: string
+    first_name: string | null
+    last_name: string | null
+    email: string | null
+    profile_photo_url: string | null
+    status?: string | null
+}
+
 interface LpathLeaderOption { id: number; user_id: string; network_id: number | null; network_name: string | null; pastor_id: string | null; pastor_name: string | null; user?: { first_name: string | null; last_name: string | null } }
 interface NetworkLeaderOption { id: number; user_id: string; pastor_id: string | null; pastor_name: string | null; user?: { first_name: string | null; last_name: string | null } }
 interface Church { id: number; church_name: string }
 
 const members = ref<LpathMember[]>([])
-const users = ref<UserOption[]>([])
 const lpathLeaders = ref<LpathLeaderOption[]>([])
 const networkLeaders = ref<NetworkLeaderOption[]>([])
 const churches = ref<Church[]>([])
@@ -44,8 +54,100 @@ const form = ref({
     is_active: 'Y',
 })
 
+// Member search for enrollment
+const memberSearch = ref('')
+const showMemberDropdown = ref(false)
+const lpathLeaderSearch = ref('')
+const showLpathDropdown = ref(false)
+const networkLeaderSearch = ref('')
+const showNetworkDropdown = ref(false)
+const availableUsers = computed(() => {
+    const q = memberSearch.value.toLowerCase()
+    const existingIds = new Set(members.value.filter(m => m.is_active === 'Y' && m.id !== editingId.value).map(m => m.user_id))
+    const approved = (admin.members as MemberProfile[]).filter((m: MemberProfile) => m.status === 'approved' && !existingIds.has(m.user_id))
+
+    if (!q) return approved.slice(0, 15)
+    return approved
+        .filter((m: MemberProfile) =>
+            `${m.first_name} ${m.last_name}`.toLowerCase().includes(q) ||
+            m.email?.toLowerCase().includes(q)
+        )
+        .slice(0, 15)
+})
+
+const filteredLpathOptions = computed(() => {
+    const q = lpathLeaderSearch.value.toLowerCase()
+    const options = lpathLeaders.value.map(l => {
+        const profile = admin.members.find(m => m.user_id === l.user_id)
+        return {
+            ...l,
+            profile_photo_url: profile?.profile_photo_url,
+            email: profile?.email
+        }
+    })
+
+    if (!q) return options.slice(0, 15)
+    return options
+        .filter(l =>
+            `${l.user?.first_name} ${l.user?.last_name}`.toLowerCase().includes(q) ||
+            l.email?.toLowerCase().includes(q)
+        )
+        .slice(0, 15)
+})
+
+const filteredNetworkOptions = computed(() => {
+    const q = networkLeaderSearch.value.toLowerCase()
+    const options = networkLeaders.value.map(n => {
+        const profile = admin.members.find(m => m.user_id === n.user_id)
+        return {
+            ...n,
+            profile_photo_url: profile?.profile_photo_url,
+            email: profile?.email
+        }
+    })
+
+    if (!q) return options.slice(0, 15)
+    return options
+        .filter(n =>
+            `${n.user?.first_name} ${n.user?.last_name}`.toLowerCase().includes(q) ||
+            n.email?.toLowerCase().includes(q)
+        )
+        .slice(0, 15)
+})
+
+function selectUser(m: MemberProfile) {
+    form.value.user_id = m.user_id
+    memberSearch.value = `${m.first_name} ${m.last_name}`
+    showMemberDropdown.value = false
+}
+
+function selectLpathLeader(l: LpathLeaderOption & { profile_photo_url?: string; email?: string }) {
+    form.value.lpath_leader_id = l.user_id
+    lpathLeaderSearch.value = displayName(l.user)
+    showLpathDropdown.value = false
+    onLpathLeaderChange()
+}
+
+function selectNetworkLeader(n: NetworkLeaderOption & { profile_photo_url?: string; email?: string }) {
+    form.value.network_leader_id = n.id
+    networkLeaderSearch.value = displayName(n.user)
+    showNetworkDropdown.value = false
+}
+
+function hideLpathDropdown() {
+    setTimeout(() => { showLpathDropdown.value = false }, 200)
+}
+
+function hideNetworkDropdown() {
+    setTimeout(() => { showNetworkDropdown.value = false }, 200)
+}
+
+function hideUserDropdown() {
+    setTimeout(() => { showMemberDropdown.value = false }, 200)
+}
+
 onMounted(async () => {
-    await Promise.all([fetchMembers(), fetchUsers(), fetchLpathLeaders(), fetchNetworkLeaders(), fetchChurches()])
+    await Promise.all([fetchMembers(), admin.fetchMembers(), fetchLpathLeaders(), fetchNetworkLeaders(), fetchChurches()])
     loading.value = false
 })
 
@@ -55,11 +157,6 @@ async function fetchMembers() {
         .select('*, user:tbl_users!tbl_lpath_members_user_id_fkey(id, first_name, last_name, email)')
         .order('created_at', { ascending: false })
     members.value = (data as LpathMember[]) ?? []
-}
-
-async function fetchUsers() {
-    const { data } = await supabase.from('tbl_users').select('id, first_name, last_name, email').eq('is_active', 'Y').order('first_name')
-    users.value = data ?? []
 }
 
 async function fetchLpathLeaders() {
@@ -97,10 +194,10 @@ const filtered = computed(() => {
     return list
 })
 
-const availableUsers = computed(() => {
-    const existingIds = new Set(members.value.filter(m => m.is_active === 'Y' && m.id !== editingId.value).map(m => m.user_id))
-    return users.value.filter(u => !existingIds.has(u.id))
-})
+function getMemberName(userId: string) {
+    const m = admin.members.find(m => m.user_id === userId)
+    return m ? `${m.first_name} ${m.last_name}` : '—'
+}
 
 function displayName(u?: { first_name: string | null; last_name: string | null }) {
     if (!u) return '—'
@@ -110,6 +207,12 @@ function displayName(u?: { first_name: string | null; last_name: string | null }
 function openAdd() {
     editingId.value = null
     form.value = { user_id: '', lpath_leader_id: '', network_leader_id: null, church_id: null, date_started: new Date().toISOString().split('T')[0], is_active: 'Y' }
+    memberSearch.value = ''
+    lpathLeaderSearch.value = ''
+    networkLeaderSearch.value = ''
+    showMemberDropdown.value = false
+    showLpathDropdown.value = false
+    showNetworkDropdown.value = false
     showModal.value = true
 }
 
@@ -123,6 +226,12 @@ function openEdit(m: LpathMember) {
         date_started: m.date_started ?? '',
         is_active: m.is_active ?? 'Y',
     }
+    memberSearch.value = displayName(m.user) || getMemberName(m.user_id)
+    lpathLeaderSearch.value = m.lpath_leader_name ?? ''
+    networkLeaderSearch.value = m.network_leader_name ?? ''
+    showMemberDropdown.value = false
+    showLpathDropdown.value = false
+    showNetworkDropdown.value = false
     showModal.value = true
 }
 
@@ -131,6 +240,7 @@ function onLpathLeaderChange() {
     const leader = lpathLeaders.value.find(l => l.user_id === form.value.lpath_leader_id)
     if (leader) {
         form.value.network_leader_id = leader.network_id
+        networkLeaderSearch.value = leader.network_name ?? ''
     }
 }
 
@@ -184,10 +294,8 @@ async function toggleActive(m: LpathMember) {
     await fetchMembers()
 }
 
-function formatDate(d: string | null) {
-    if (!d) return '—'
-    return new Date(d).toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric' })
-}
+// function formatDate no longer used in template for this page?
+// Wait, checking template usage.
 
 function churchName(id: number | null) {
     if (!id) return '—'
@@ -277,26 +385,120 @@ function churchName(id: number | null) {
                 <div class="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
                     <h3 class="text-lg font-heading font-bold text-navy mb-4">{{ editingId ? 'Edit' : 'Add' }} L-Path Member</h3>
                     <div class="space-y-4">
-                        <div>
+                        <div class="relative">
                             <label class="block text-sm font-medium text-gray-700 mb-1">Member</label>
-                            <select v-model="form.user_id" class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-navy/30" :disabled="!!editingId">
-                                <option value="">Select a member...</option>
-                                <option v-for="u in availableUsers" :key="u.id" :value="u.id">{{ u.first_name }} {{ u.last_name }} ({{ u.email }})</option>
-                            </select>
+                            <input
+                                v-model="memberSearch"
+                                type="text"
+                                placeholder="Search by name or email..."
+                                :disabled="!!editingId"
+                                @focus="showMemberDropdown = true"
+                                @blur="hideUserDropdown"
+                                class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-navy/30 disabled:bg-gray-50"
+                            />
+
+                            <!-- Search Dropdown -->
+                            <div
+                                v-if="showMemberDropdown"
+                                class="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto"
+                            >
+                                <div
+                                    v-for="m in availableUsers"
+                                    :key="m.user_id"
+                                    @mousedown="selectUser(m)"
+                                    class="flex items-center gap-3 px-3 py-2 hover:bg-gray-50 cursor-pointer"
+                                >
+                                    <div class="w-8 h-8 rounded-full overflow-hidden bg-navy/5 flex items-center justify-center shrink-0">
+                                        <img v-if="m.profile_photo_url" :src="m.profile_photo_url" class="w-full h-full object-cover" />
+                                        <span v-else class="text-[10px] font-bold text-navy">
+                                            {{ m.first_name?.[0] }}{{ m.last_name?.[0] }}
+                                        </span>
+                                    </div>
+                                    <div class="min-w-0">
+                                        <p class="text-xs font-semibold text-gray-900 truncate">{{ m.first_name }} {{ m.last_name }}</p>
+                                        <p class="text-[10px] text-gray-400 truncate">{{ m.email }}</p>
+                                    </div>
+                                </div>
+                                <div v-if="!availableUsers.length" class="px-3 py-4 text-center text-xs text-gray-400">
+                                    No members found.
+                                </div>
+                            </div>
                         </div>
-                        <div>
+                        <div class="relative">
                             <label class="block text-sm font-medium text-gray-700 mb-1">L-Path Leader (Under)</label>
-                            <select v-model="form.lpath_leader_id" class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-navy/30" @change="onLpathLeaderChange">
-                                <option value="">Select an L-Path leader...</option>
-                                <option v-for="l in lpathLeaders" :key="l.user_id" :value="l.user_id">{{ displayName(l.user) }}</option>
-                            </select>
+                            <input
+                                v-model="lpathLeaderSearch"
+                                type="text"
+                                placeholder="Search L-Path leader..."
+                                @focus="showLpathDropdown = true"
+                                @blur="hideLpathDropdown"
+                                class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-navy/30"
+                            />
+
+                            <!-- L-Path Search Dropdown -->
+                            <div
+                                v-if="showLpathDropdown"
+                                class="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto"
+                            >
+                                <div
+                                    v-for="l in filteredLpathOptions"
+                                    :key="l.user_id"
+                                    @mousedown="selectLpathLeader(l)"
+                                    class="flex items-center gap-3 px-3 py-2 hover:bg-gray-50 cursor-pointer"
+                                >
+                                    <div class="w-8 h-8 rounded-full overflow-hidden bg-navy/5 flex items-center justify-center shrink-0">
+                                        <img v-if="l.profile_photo_url" :src="l.profile_photo_url" class="w-full h-full object-cover" />
+                                        <span v-else class="text-[10px] font-bold text-navy">
+                                            {{ l.user?.first_name?.[0] }}{{ l.user?.last_name?.[0] }}
+                                        </span>
+                                    </div>
+                                    <div class="min-w-0">
+                                        <p class="text-xs font-semibold text-gray-900 truncate">{{ displayName(l.user) }}</p>
+                                        <p class="text-[10px] text-gray-400 truncate">{{ l.email }}</p>
+                                    </div>
+                                </div>
+                                <div v-if="!filteredLpathOptions.length" class="px-3 py-4 text-center text-xs text-gray-400">
+                                    No L-Path leaders found.
+                                </div>
+                            </div>
                         </div>
-                        <div>
+                        <div class="relative">
                             <label class="block text-sm font-medium text-gray-700 mb-1">Network Leader</label>
-                            <select v-model="form.network_leader_id" class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-navy/30">
-                                <option :value="null">Select a network leader...</option>
-                                <option v-for="n in networkLeaders" :key="n.id" :value="n.id">{{ displayName(n.user) }}</option>
-                            </select>
+                            <input
+                                v-model="networkLeaderSearch"
+                                type="text"
+                                placeholder="Search network leader..."
+                                @focus="showNetworkDropdown = true"
+                                @blur="hideNetworkDropdown"
+                                class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-navy/30"
+                            />
+
+                            <!-- Network Search Dropdown -->
+                            <div
+                                v-if="showNetworkDropdown"
+                                class="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto"
+                            >
+                                <div
+                                    v-for="n in filteredNetworkOptions"
+                                    :key="n.user_id"
+                                    @mousedown="selectNetworkLeader(n)"
+                                    class="flex items-center gap-3 px-3 py-2 hover:bg-gray-50 cursor-pointer"
+                                >
+                                    <div class="w-8 h-8 rounded-full overflow-hidden bg-navy/5 flex items-center justify-center shrink-0">
+                                        <img v-if="n.profile_photo_url" :src="n.profile_photo_url" class="w-full h-full object-cover" />
+                                        <span v-else class="text-[10px] font-bold text-navy">
+                                            {{ n.user?.first_name?.[0] }}{{ n.user?.last_name?.[0] }}
+                                        </span>
+                                    </div>
+                                    <div class="min-w-0">
+                                        <p class="text-xs font-semibold text-gray-900 truncate">{{ displayName(n.user) }}</p>
+                                        <p class="text-[10px] text-gray-400 truncate">{{ n.email }}</p>
+                                    </div>
+                                </div>
+                                <div v-if="!filteredNetworkOptions.length" class="px-3 py-4 text-center text-xs text-gray-400">
+                                    No network leaders found.
+                                </div>
+                            </div>
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Church</label>

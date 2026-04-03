@@ -225,11 +225,7 @@ async function handleLogout() {
     >
       <!-- Brand -->
       <div class="flex items-center gap-3.5 px-6 h-16 border-b border-white/8">
-        <div
-          class="w-9 h-9 rounded-lg bg-gold flex items-center justify-center shadow-lg shadow-gold/20"
-        >
-          <span class="text-navy font-heading font-extrabold text-sm tracking-tight">R</span>
-        </div>
+        <img src="@/assets/img/logos/rcmi-logo.png" alt="RCMI" class="w-9 h-9 rounded-lg" />
         <div class="leading-tight">
           <span class="font-heading font-bold text-[15px] block">{{ sidebarTitle }}</span>
           <span class="text-[10px] text-white/30 font-medium uppercase tracking-widest">{{
