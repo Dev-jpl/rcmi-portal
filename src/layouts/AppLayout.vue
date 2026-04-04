@@ -132,9 +132,7 @@ async function handleLogout() {
         >
             <!-- Brand -->
             <div class="flex items-center gap-3.5 px-6 h-16 border-b border-white/[0.08]">
-                <div class="w-9 h-9 rounded-lg bg-gold flex items-center justify-center shadow-lg shadow-gold/20">
-                    <span class="text-navy font-heading font-extrabold text-sm tracking-tight">R</span>
-                </div>
+                <img src="@/assets/img/logos/rcmi-logo.png" alt="RCMI" class="w-9 h-9 rounded-lg" />
                 <div class="leading-tight">
                     <span class="font-heading font-bold text-[15px] block">RCMI Portal</span>
                     <span class="text-[10px] text-white/40 font-medium uppercase tracking-[0.1em]">Member</span>
@@ -189,12 +187,21 @@ async function handleLogout() {
                             v-for="item in group.items"
                             :key="item.label"
                             :to="item.to"
-                            class="group flex items-center gap-3.5 px-3.5 py-3 rounded-lg text-sm font-medium text-white/50 hover:text-white/90 hover:bg-white/[0.07] transition-all duration-200"
-                            active-class="!bg-white/[0.12] !text-gold"
-                            @click="sidebarOpen = false"
+                            custom
+                            v-slot="{ href, navigate, isActive }"
                         >
-                            <svg class="w-5 h-5 shrink-0 transition-colors duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" v-html="icons[item.iconKey]" />
-                            {{ item.label }}
+                            <a
+                                :href="href"
+                                @click="(e) => { navigate(e); sidebarOpen = false }"
+                                class="group relative flex items-center gap-3.5 px-3.5 py-3 rounded-lg text-sm font-medium transition-all duration-200"
+                                :class="isActive ? '!bg-white/[0.12] !text-gold' : 'text-white/50 hover:text-white/90 hover:bg-white/[0.07]'"
+                            >
+                                <!-- Gold vertical accent bar -->
+                                <div v-if="isActive" class="absolute left-0 w-1 h-1/2 bg-gold rounded-r-full" />
+                                
+                                <svg class="w-5 h-5 shrink-0 transition-colors duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" v-html="icons[item.iconKey]" />
+                                <span class="flex-1">{{ item.label }}</span>
+                            </a>
                         </router-link>
                     </div>
                 </div>
@@ -247,8 +254,9 @@ async function handleLogout() {
                     @click="showUserMenu = !showUserMenu"
                     class="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg hover:bg-white/[0.06] transition-colors text-left"
                 >
-                    <div class="w-10 h-10 rounded-lg bg-white/[0.1] flex items-center justify-center text-sm font-bold text-gold ring-1 ring-white/[0.08]">
-                        {{ auth.user?.first_name?.[0] }}{{ auth.user?.last_name?.[0] }}
+                    <div class="w-10 h-10 rounded-lg bg-white/[0.1] flex items-center justify-center text-sm font-bold text-gold ring-1 ring-white/[0.08] overflow-hidden">
+                        <img v-if="auth.profile?.profile_photo_url" :src="auth.profile.profile_photo_url" class="w-full h-full object-cover" />
+                        <span v-else>{{ auth.user?.first_name?.[0] }}{{ auth.user?.last_name?.[0] }}</span>
                     </div>
                     <div class="min-w-0 flex-1">
                         <p class="text-sm font-medium truncate text-white/90">{{ auth.user?.first_name }} {{ auth.user?.last_name }}</p>

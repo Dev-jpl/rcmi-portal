@@ -8,22 +8,39 @@ const props = defineProps<{ id: string }>()
 const router = useRouter()
 const admin = useAdminStore()
 
-const study = ref<any>(null)
-const churches = ref<any[]>([])
+interface BibleStudy {
+  id: string
+  title: string
+  satellite_church_id: number | null
+  location: string | null
+  schedules: any
+  is_active: boolean
+}
+
+interface Session {
+  id: string
+  bible_study_id: string
+  session_date: string
+  notes: string | null
+  created_at: string
+}
+
+const study = ref<BibleStudy | null>(null)
+const churches = ref<{ id: number; church_name: string }[]>([])
 const handlers = ref<string[]>([])
 
-const sessions = ref<any[]>([])
+const sessions = ref<Session[]>([])
 const loading = ref(true)
 const message = ref<{ type: 'success' | 'error'; text: string } | null>(null)
 
 // Session Management
 const showSessionModal = ref(false)
-const editingSession = ref<any>(null)
-const sessionForm = ref({ session_date: '', topic: '', notes: '' })
+const editingSession = ref<Session | null>(null)
+const sessionForm = ref({ session_date: '', notes: '' })
 const sessionSaving = ref(false)
 
 // Active Session View (Attendance)
-const activeSessionId = ref<number | null>(null)
+const activeSessionId = ref<string | null>(null)
 const attendanceLogs = ref<any[]>([])
 const attendanceLoading = ref(false)
 
@@ -150,13 +167,13 @@ function openAddSession() {
   editingSession.value = null
   const now = new Date()
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
-  sessionForm.value = { session_date: today, topic: '', notes: '' }
+  sessionForm.value = { session_date: today, notes: '' }
   showSessionModal.value = true
 }
 
-function openEditSession(s: any) {
+function openEditSession(s: Session) {
   editingSession.value = s
-  sessionForm.value = { session_date: s.session_date, topic: s.topic ?? '', notes: s.notes ?? '' }
+  sessionForm.value = { session_date: s.session_date, notes: s.notes ?? '' }
   showSessionModal.value = true
 }
 
@@ -168,8 +185,7 @@ async function handleSaveSession() {
   const payload = {
     bible_study_id: props.id,
     session_date: sessionForm.value.session_date,
-    topic: sessionForm.value.topic.trim() || null,
-    notes: sessionForm.value.notes.trim() || null,
+    notes: (sessionForm.value.notes || '').trim() || null,
   }
 
   if (editingSession.value) {
@@ -195,7 +211,7 @@ async function handleSaveSession() {
   await fetchSessions()
 }
 
-async function removeSession(id: number) {
+async function removeSession(id: string) {
   if (!confirm('Are you sure you want to delete this session? All attendance logs will be lost.'))
     return
   const { error } = await supabase.from('tbl_bible_study_sessions').delete().eq('id', id)
@@ -208,7 +224,7 @@ const activeSession = computed(
   () => sessions.value.find((s) => s.id === activeSessionId.value) || null,
 )
 
-async function viewAttendance(s: any) {
+async function viewAttendance(s: Session) {
   activeSessionId.value = s.id
   message.value = null
   await fetchAttendance()
@@ -275,7 +291,7 @@ async function logAttendance() {
   addingLog.value = false
 }
 
-async function removeAttendance(id: number) {
+async function removeAttendance(id: string) {
   if (!confirm('Remove this person from attendance?')) return
   const { error } = await supabase.from('tbl_bible_study_attendance').delete().eq('id', id)
   if (error) alert(error.message)
@@ -338,8 +354,7 @@ async function removeAttendance(id: number) {
             </div>
           </div>
           <p v-else class="text-sm text-gray-500">
-            {{ formatDate(activeSession?.session_date) }} •
-            {{ activeSession?.topic || 'No topic specified' }}
+            {{ formatDate(activeSession?.session_date || '') }}
           </p>
         </div>
       </div>
@@ -389,7 +404,6 @@ async function removeAttendance(id: number) {
           >
             <div>
               <p class="font-medium text-gray-900">{{ formatDate(s.session_date) }}</p>
-              <p class="text-xs text-gray-500">{{ s.topic || 'Untitled Session' }}</p>
             </div>
             <div class="flex items-center gap-3">
               <button class="text-xs text-navy hover:underline" @click="viewAttendance(s)">
@@ -439,7 +453,9 @@ async function removeAttendance(id: number) {
 
           <form @submit.prevent="logAttendance" class="space-y-4">
             <div v-if="logTab === 'registered'" class="relative">
-              <label class="block text-xs font-medium text-gray-500 mb-1">Select Portal Member</label>
+              <label class="block text-xs font-medium text-gray-500 mb-1"
+                >Select Portal Member</label
+              >
               <input
                 v-model="memberSearch"
                 type="text"
@@ -479,7 +495,10 @@ async function removeAttendance(id: number) {
                     <p class="text-[10px] text-gray-400 truncate">{{ m.email }}</p>
                   </div>
                 </div>
-                <div v-if="!availableMembers.length" class="px-3 py-4 text-center text-xs text-gray-400">
+                <div
+                  v-if="!availableMembers.length"
+                  class="px-3 py-4 text-center text-xs text-gray-400"
+                >
                   No members found.
                 </div>
               </div>
@@ -496,7 +515,9 @@ async function removeAttendance(id: number) {
               </div>
               <div class="grid grid-cols-2 gap-2">
                 <div>
-                  <label class="block text-xs font-medium text-gray-500 mb-1">Email (Optional)</label>
+                  <label class="block text-xs font-medium text-gray-500 mb-1"
+                    >Email (Optional)</label
+                  >
                   <input
                     v-model="guestEmail"
                     type="email"
@@ -553,7 +574,6 @@ async function removeAttendance(id: number) {
               :key="a.id"
               class="p-3 flex items-center justify-between hover:bg-gray-50"
             >
-
               <div class="flex items-center gap-4">
                 <span class="text-xs text-gray-400">{{
                   new Date(a.logged_at).toLocaleTimeString([], {
@@ -610,7 +630,7 @@ async function removeAttendance(id: number) {
                     >Topic / Lesson (Optional)</label
                   >
                   <input
-                    v-model="sessionForm.topic"
+                    v-model="sessionForm.notes"
                     type="text"
                     placeholder="e.g. Genesis 1"
                     class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"

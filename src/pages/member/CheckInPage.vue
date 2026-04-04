@@ -1,20 +1,23 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/auth.store'
 import { useAttendanceStore } from '@/stores/attendance.store'
+import { useEventStore } from '@/stores/event.store'
 import type { Tables } from '@/types/database.types'
 
 const auth = useAuthStore()
 const attendance = useAttendanceStore()
+const eventStore = useEventStore()
 
 type Event = Tables<'tbl_events'>
+type DefaultEvent = Tables<'lib_default_events'>
 
-const events = ref<Event[]>([])
+const events = ref<(Event & { isTemplate?: boolean; templateData?: DefaultEvent })[]>([])
 const loading = ref(true)
-const checkedIn = ref<Set<number>>(new Set())
-const checkingIn = ref<number | null>(null)
-const messages = ref<Record<number, { type: 'success' | 'error'; text: string }>>({})
+const checkedIn = ref<Set<string>>(new Set())
+const checkingIn = ref<string | null>(null)
+const messages = ref<Record<string, { type: 'success' | 'error'; text: string }>>({})
 
 onMounted(async () => {
     await Promise.all([fetchActiveEvents(), attendance.fetchMyLogs()])
@@ -23,29 +26,67 @@ onMounted(async () => {
 })
 
 async function fetchActiveEvents() {
-    const now = new Date().toISOString()
+    const nowLocal = new Date()
+    const nowIso = nowLocal.toISOString()
     const churchId = auth.profile?.satellite_church_id
+    const currentDay = nowLocal.toLocaleDateString('en-US', { weekday: 'long' })
+    const currentHour = nowLocal.getHours()
 
-    // Show all active events whose end time hasn't passed yet
+    // 1. Fetch actual events (manual/special)
     let query = supabase
         .from('tbl_events')
         .select('*')
         .eq('is_active', true)
-        .gte('duration_to', now)
+        .gte('duration_to', nowIso)
         .order('duration_from')
 
     if (churchId) {
         query = query.or(`satellite_church_id.eq.${churchId},satellite_church_id.is.null`)
     }
 
-    const { data } = await query
-    // Only show events that allow self check-in
-    events.value = (data ?? []).filter((e: any) => e.allow_self_checkin !== false)
+    const { data: tblEvents } = await query
+    const activeTblEvents = (tblEvents ?? []).filter((e) => e.allow_self_checkin !== false) as Event[]
+
+    // 2. Fetch default events if visibility window is open (>= 1 AM)
+    let defaultEvents: any[] = []
+    
+    if (currentHour >= 1) {
+        const { data: templates } = await supabase
+            .from('lib_default_events')
+            .select('*')
+            .eq('is_active', true)
+            .eq('allow_self_checkin', true)
+            .eq('day_of_week', currentDay)
+
+        if (templates) {
+            defaultEvents = templates.map(t => {
+                const today = new Date().toISOString().split('T')[0]
+                return {
+                    id: t.id, // Now using actual UUID
+                    event_title: t.event_title,
+                    event_type: t.event_type,
+                    duration_from: `${today}T${t.default_start_time || '00:00'}:00`,
+                    duration_to: `${today}T${t.default_end_time || '23:59'}:00`,
+                    is_active: true,
+                    allow_self_checkin: true,
+                    isTemplate: true,
+                    templateData: t,
+                    satellite_church_id: churchId || null
+                }
+            })
+        }
+    }
+
+    // Merge and sort
+    events.value = [...activeTblEvents, ...defaultEvents].sort((a, b) => 
+        new Date(a.duration_from!).getTime() - new Date(b.duration_from!).getTime()
+    )
 }
 
 function markAlreadyCheckedIn() {
     const now = new Date()
     const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+    
     for (const log of attendance.logs) {
         if (log.log_date === today && log.event_id) {
             checkedIn.value.add(log.event_id)
@@ -53,19 +94,37 @@ function markAlreadyCheckedIn() {
     }
 }
 
-async function handleCheckIn(event: Event) {
-    checkingIn.value = event.id
-    delete messages.value[event.id]
+async function handleCheckIn(event: Event & { isTemplate?: boolean; templateData?: DefaultEvent }) {
+    const eventKey = event.id
+    checkingIn.value = eventKey
+    delete messages.value[eventKey]
 
-    const result = await attendance.selfCheckIn(event)
+    let targetEvent = event
+
+    // If it's a template, materialize it first
+    if (event.isTemplate && event.templateData) {
+        const result = await eventStore.findOrCreateFromDefault(event.templateData)
+        if (!result.success || !result.data) {
+            messages.value[eventKey] = { type: 'error', text: result.error ?? 'Failed to prepare event' }
+            checkingIn.value = null
+            return
+        }
+        targetEvent = result.data
+    }
+
+    const result = await attendance.selfCheckIn(targetEvent)
 
     if (result.success) {
-        checkedIn.value.add(event.id)
-        messages.value[event.id] = { type: 'success', text: 'Checked in successfully!' }
-    } else {
-        messages.value[event.id] = { type: 'error', text: result.error ?? 'Check-in failed' }
-        if (result.error?.includes('Already')) {
+        checkedIn.value.add(targetEvent.id)
+        if (event.isTemplate) {
             checkedIn.value.add(event.id)
+        }
+        messages.value[eventKey] = { type: 'success', text: 'Checked in successfully!' }
+    } else {
+        messages.value[eventKey] = { type: 'error', text: result.error ?? 'Check-in failed' }
+        if (result.error?.includes('Already')) {
+            checkedIn.value.add(targetEvent.id)
+            if (event.isTemplate) checkedIn.value.add(event.id)
         }
     }
     checkingIn.value = null
@@ -80,7 +139,8 @@ onMounted(() => {
 
 onUnmounted(() => clearInterval(nowTimer))
 
-function hasStarted(event: Event): boolean {
+function hasStarted(event: Event & { isTemplate?: boolean }): boolean {
+    if (event.isTemplate) return true 
     if (!event.duration_from) return true
     return now.value >= new Date(event.duration_from)
 }
@@ -164,9 +224,9 @@ function formatTime(d: string | null) {
                 <p
                     v-if="messages[event.id]"
                     class="mt-2 text-sm rounded-lg px-3 py-2"
-                    :class="messages[event.id].type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'"
+                    :class="messages[event.id]?.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'"
                 >
-                    {{ messages[event.id].text }}
+                    {{ messages[event.id]?.text }}
                 </p>
             </div>
         </div>

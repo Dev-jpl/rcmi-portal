@@ -10,12 +10,12 @@ const auth = useAuthStore()
 const admin = useAdminStore()
 
 interface Church {
-  id: number
+  id: number // lib_satellite_churches still uses number for ID?
   church_name: string
 }
 
 interface BibleStudy {
-  id: number
+  id: string
   title: string
   satellite_church_id: number | null
   location: string | null
@@ -25,7 +25,7 @@ interface BibleStudy {
 }
 
 interface Handler {
-  bible_study_id: number
+  bible_study_id: string
   user_id: string
 }
 
@@ -35,7 +35,7 @@ const message = ref<{ type: 'success' | 'error'; text: string } | null>(null)
 
 const churches = ref<Church[]>([])
 const studies = ref<BibleStudy[]>([])
-const handlersMap = ref<Map<number, string[]>>(new Map()) // study_id -> array of member names
+const handlersMap = ref<Map<string, string[]>>(new Map()) // study_id -> array of member names
 
 const showModal = ref(false)
 const editingStudy = ref<BibleStudy | null>(null)
@@ -52,7 +52,7 @@ const handlerSearch = ref('')
 const showHandlerDropdown = ref(false)
 
 const showDeleteModal = ref(false)
-const deleteTarget = ref<{ id: number; label: string } | null>(null)
+const deleteTarget = ref<{ id: string; label: string } | null>(null)
 const deleting = ref(false)
 
 onMounted(async () => {
@@ -84,7 +84,7 @@ async function fetchStudies() {
         studies.value.map((s) => s.id),
       )
 
-    const map = new Map<number, string[]>()
+    const map = new Map<string, string[]>()
     for (const h of (hData ?? []) as Handler[]) {
       const list = map.get(h.bible_study_id) ?? []
       list.push(h.user_id)
@@ -122,7 +122,7 @@ function getMemberName(userId: string) {
   return m ? `${m.first_name} ${m.last_name}` : 'Unknown'
 }
 
-function getHandlerNames(studyId: number) {
+function getHandlerNames(studyId: string) {
   const ids = handlersMap.value.get(studyId) ?? []
   if (ids.length === 0) return '—'
   return ids.map((id) => getMemberName(id)).join(', ')
@@ -233,7 +233,7 @@ async function handleSave() {
       saving.value = false
       return
     }
-    studyId = data.id
+    studyId = data.id as string
   }
 
   // Insert handlers
