@@ -38,3 +38,9 @@ __screenshots__/
 # Vite
 *.timestamp-*-*.mjs
 .vercel
+
+# Claude Code
+.claude/
+.agents/
+.mcp.json
+skills-lock.json
