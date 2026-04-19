@@ -119,13 +119,22 @@ export const useAuthStore = defineStore('auth', () => {
         error.value = null
 
         try {
-            // 1. Create Supabase Auth user
+            // 1. Create Supabase Auth user — pass registration data as metadata so the
+            //    server-side trigger (handle_new_user) can create tbl_users and
+            //    tbl_members_profile with SECURITY DEFINER, bypassing RLS.
             const siteUrl = import.meta.env.VITE_APP_URL || window.location.origin
             const { data: authData, error: authError } = await supabase.auth.signUp({
                 email: payload.email,
                 password: payload.password,
                 options: {
                     emailRedirectTo: `${siteUrl}/auth/callback`,
+                    data: {
+                        first_name: payload.firstName,
+                        last_name: payload.lastName,
+                        middle_name: payload.middleName ?? null,
+                        satellite_church_id: payload.satelliteChurchId,
+                        satellite_church_name: payload.satelliteChurchName ?? null,
+                    },
                 },
             })
 
@@ -139,38 +148,12 @@ export const useAuthStore = defineStore('auth', () => {
                 throw new Error('An account with this email has already been registered.')
             }
 
-            const userId = authData.user.id
-
-            // 2. Insert into tbl_users (default role = member, pending)
-            const { error: userError } = await supabase.from('tbl_users').insert({
-                id: userId,
-                email: payload.email,
-                first_name: payload.firstName,
-                last_name: payload.lastName,
-                role_id: 6, // member role
-                role_type: 'member',
-                is_active: 'P' // pending
-            })
-
-            if (userError) throw userError
-
-            // 3. Insert into tbl_members_profile
-            const { error: profileError } = await supabase.from('tbl_members_profile').insert({
-                user_id: userId,
-                email: payload.email,
-                first_name: payload.firstName,
-                middle_name: payload.middleName ?? null,
-                last_name: payload.lastName,
-                satellite_church_id: payload.satelliteChurchId,
-                satellite_church_name: payload.satelliteChurchName ?? null,
-                status: 'pending'
-            })
-
-            if (profileError) throw profileError
-
-            // Fetch user data so session is established
+            // The trigger handle_new_user fires on auth.users INSERT and creates the
+            // tbl_users and tbl_members_profile rows server-side — no client inserts needed.
             session.value = authData.session
-            await fetchUserData(userId)
+            if (authData.session) {
+                await fetchUserData(authData.user.id)
+            }
 
             return { success: true }
         } catch (err: any) {
