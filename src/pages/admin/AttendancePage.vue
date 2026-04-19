@@ -433,10 +433,7 @@ function formatTime(d: string | null) {
                   ? 'bg-white text-navy shadow-sm'
                   : 'text-gray-400 hover:text-gray-600'
               "
-              @click="
-                manualLogType = 'event'
-                manualForm.event_id = null
-              "
+              @click="manualLogType = 'event'; manualForm.event_id = null"
             >
               Event
             </button>
@@ -448,10 +445,7 @@ function formatTime(d: string | null) {
                   ? 'bg-white text-navy shadow-sm'
                   : 'text-gray-400 hover:text-gray-600'
               "
-              @click="
-                manualLogType = 'program'
-                manualForm.program_id = null
-              "
+              @click="manualLogType = 'program'; manualForm.program_id = null"
             >
               Program
             </button>
