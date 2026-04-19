@@ -593,7 +593,10 @@ async function handleDelete() {
                       v-for="m in availableHandlers"
                       :key="m.user_id"
                       type="button"
-                      @click="toggleHandlerSelection(m.user_id); handlerSearch = ''"
+                      @click="
+                        toggleHandlerSelection(m.user_id)
+                        handlerSearch = ''
+                      "
                       class="w-full flex items-center gap-3 px-3 py-2 hover:bg-gray-50 text-left transition-colors border-b border-gray-100 last:border-0"
                     >
                       <img

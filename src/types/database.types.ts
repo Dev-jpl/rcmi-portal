@@ -360,7 +360,7 @@ export type Database = {
           created_at: string | null
           created_by: string | null
           created_by_name: string | null
-          default_event_id: string | null
+          default_event_id: number | null
           duration_from: string | null
           duration_to: string | null
           event_title: string
@@ -377,7 +377,7 @@ export type Database = {
           created_at?: string | null
           created_by?: string | null
           created_by_name?: string | null
-          default_event_id?: string | null
+          default_event_id?: number | null
           duration_from?: string | null
           duration_to?: string | null
           event_title: string
@@ -394,7 +394,7 @@ export type Database = {
           created_at?: string | null
           created_by?: string | null
           created_by_name?: string | null
-          default_event_id?: string | null
+          default_event_id?: number | null
           duration_from?: string | null
           duration_to?: string | null
           event_title?: string

@@ -9,7 +9,7 @@ import type { Tables, TablesInsert } from '@/types/database.types'
 type Event = Tables<'tbl_events'>
 
 interface DefaultEvent {
-  id: string
+  id: number
   event_title: string
   event_type: string
   day_of_week: string

@@ -85,7 +85,7 @@ export const useEventStore = defineStore('event', () => {
         const { data: existing } = await supabase
             .from('tbl_events')
             .select('*')
-            .eq('default_event_id', defaultEvent.id)
+            .eq('default_event_id', Number(defaultEvent.id))
             .gte('duration_from', `${today}T00:00:00`)
             .lte('duration_from', `${today}T23:59:59`)
             .maybeSingle()
@@ -93,6 +93,13 @@ export const useEventStore = defineStore('event', () => {
         if (existing) return { success: true, data: existing as Event }
 
         // Create new instance
+        // Normalize time: ensure HH:MM:SS format (strip extra :00 if already has seconds)
+        const toTimestamp = (time: string) => {
+            const parts = time.split(':')
+            const t = parts.length >= 3 ? `${parts[0]}:${parts[1]}:${parts[2]}` : `${time}:00`
+            return `${today}T${t}`
+        }
+
         const startTime = defaultEvent.default_start_time || '09:00'
         const endTime = defaultEvent.default_end_time || '11:00'
 
@@ -100,15 +107,15 @@ export const useEventStore = defineStore('event', () => {
         const payload: TablesInsert<'tbl_events'> = {
             event_title: defaultEvent.event_title,
             event_type: defaultEvent.event_type,
-            duration_from: `${today}T${startTime}:00`,
-            duration_to: `${today}T${endTime}:00`,
-            checkin_start_at: (defaultEvent as any).default_checkin_time 
-                ? `${today}T${(defaultEvent as any).default_checkin_time}:00` 
+            duration_from: toTimestamp(startTime),
+            duration_to: toTimestamp(endTime),
+            checkin_start_at: (defaultEvent as any).default_checkin_time
+                ? toTimestamp((defaultEvent as any).default_checkin_time)
                 : `${today}T01:00:00`,
             is_active: true,
             allow_self_checkin: true,
             satellite_church_id: auth.profile?.satellite_church_id ?? null,
-            default_event_id: defaultEvent.id,
+            default_event_id: Number(defaultEvent.id),
         }
 
         const { data: created, error: err } = await supabase
