@@ -88,9 +88,7 @@ async function handleLogin() {
         return
     }
 
-    if (auth.isPending) {
-        router.push({ name: 'pending' })
-    } else if (redirect && redirect !== '/login' && redirect !== '/register') {
+    if (redirect && redirect !== '/login' && redirect !== '/register') {
         router.push(redirect)
     } else if (auth.canAccessAdmin) {
         const target = auth.isAdmin ? 'admin-dashboard'

@@ -16,11 +16,15 @@ export async function authGuard(
         return next({ name: 'login', query: { redirect: to.fullPath } })
     }
 
-    // Removed pending block: pending users can now access member-dashboard but with restricted privileges
-
     // Redirect rejected members to dedicated page
     if (auth.profile?.status === 'rejected' && to.name !== 'rejected') {
         return next({ name: 'rejected' })
+    }
+
+    // Block pending members from approval-only routes (Devotional Wall, Prayer
+    // Requests, Directory). They keep view-only access elsewhere.
+    if (to.matched.some(r => r.meta.requiresApproved) && auth.isPending) {
+        return next({ name: 'member-dashboard' })
     }
 
     return next()

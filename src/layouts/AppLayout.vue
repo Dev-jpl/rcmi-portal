@@ -12,11 +12,102 @@ const showUserMenu = ref(false)
 const showQr = ref(false)
 const showOnboardingModal = ref(false)
 
+// Approved-member tour
+const showApprovedTour = ref(false)
+const approvedTourStep = ref(0)
+const approvedTourSteps = [
+    {
+        title: 'Welcome to the full RCMI Portal!',
+        body: "Your account has been approved. You now have full access to share, connect, and engage with the community. Here's a quick tour of what just unlocked.",
+        icon: `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>`,
+        accent: 'emerald',
+    },
+    {
+        title: 'Devotional Wall',
+        body: 'Share thoughts, scripture reflections, and encouragements with the community. React to and comment on posts from other members.',
+        icon: `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"/>`,
+        accent: 'violet',
+        cta: { label: 'Visit Devotional Wall', to: 'member-devotional' },
+    },
+    {
+        title: 'Prayer Requests',
+        body: 'Submit prayer requests and pray together with the community. Your church family is here to lift you up.',
+        icon: `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z"/>`,
+        accent: 'sky',
+        cta: { label: 'Visit Prayer Requests', to: 'member-prayer-requests' },
+    },
+    {
+        title: 'Member Directory',
+        body: 'Browse and connect with other members in your satellite church and network.',
+        icon: `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z"/>`,
+        accent: 'indigo',
+        cta: { label: 'Open Directory', to: 'member-directory' },
+    },
+    {
+        title: 'Events & Programs',
+        body: "RSVP to upcoming events, join programs, and stay engaged with what's happening in your church community.",
+        icon: `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5"/>`,
+        accent: 'amber',
+        cta: { label: 'Browse Events', to: 'member-events' },
+    },
+    {
+        title: 'Your QR Code',
+        body: 'Use the QR icon in the top bar to show your personal QR code for fast event check-in.',
+        icon: `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 013.75 9.375v-4.5zM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5zM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M6.75 6.75h.75v.75h-.75v-.75zM6.75 16.5h.75v.75h-.75v-.75zM16.5 6.75h.75v.75h-.75v-.75zM13.5 13.5h.75v.75h-.75v-.75zM13.5 19.5h.75v.75h-.75v-.75zM19.5 13.5h.75v.75h-.75v-.75zM19.5 19.5h.75v.75h-.75v-.75zM16.5 16.5h.75v.75h-.75v-.75z"/>`,
+        accent: 'navy',
+    },
+]
+
+const accentClasses: Record<string, { bg: string; iconBg: string; iconText: string; btn: string }> = {
+    emerald: { bg: 'bg-emerald-50', iconBg: 'bg-emerald-100', iconText: 'text-emerald-600', btn: 'bg-emerald-600 hover:bg-emerald-700' },
+    violet:  { bg: 'bg-violet-50',  iconBg: 'bg-violet-100',  iconText: 'text-violet-600',  btn: 'bg-violet-600 hover:bg-violet-700' },
+    sky:     { bg: 'bg-sky-50',     iconBg: 'bg-sky-100',     iconText: 'text-sky-600',     btn: 'bg-sky-600 hover:bg-sky-700' },
+    indigo:  { bg: 'bg-indigo-50',  iconBg: 'bg-indigo-100',  iconText: 'text-indigo-600',  btn: 'bg-indigo-600 hover:bg-indigo-700' },
+    amber:   { bg: 'bg-amber-50',   iconBg: 'bg-amber-100',   iconText: 'text-amber-600',   btn: 'bg-amber-600 hover:bg-amber-700' },
+    navy:    { bg: 'bg-navy/5',     iconBg: 'bg-navy/10',     iconText: 'text-navy',        btn: 'bg-navy hover:bg-navy-700' },
+}
+
+const approvedTourCurrent = computed(() => approvedTourSteps[approvedTourStep.value])
+const approvedTourAccent = computed(() => accentClasses[approvedTourCurrent.value.accent])
+const approvedTourLastStep = computed(() => approvedTourStep.value === approvedTourSteps.length - 1)
+
+function approvedTourKey() {
+    return auth.user?.id ? `approvedTourShown:${auth.user.id}` : null
+}
+
+function nextApprovedTourStep() {
+    if (approvedTourLastStep.value) {
+        finishApprovedTour()
+    } else {
+        approvedTourStep.value++
+    }
+}
+
+function finishApprovedTour() {
+    const key = approvedTourKey()
+    if (key) localStorage.setItem(key, '1')
+    showApprovedTour.value = false
+}
+
+function goToTourCta(routeName: string) {
+    finishApprovedTour()
+    router.push({ name: routeName })
+}
+
 onMounted(() => {
     if (auth.isPending) {
         if (!sessionStorage.getItem('onboardingShown')) {
             showOnboardingModal.value = true
             sessionStorage.setItem('onboardingShown', 'true')
+        }
+        return
+    }
+
+    // First time the user is seen as approved — show the welcome tour
+    if (auth.isApproved) {
+        const key = approvedTourKey()
+        if (key && !localStorage.getItem(key)) {
+            showApprovedTour.value = true
         }
     }
 })
@@ -47,31 +138,40 @@ interface NavGroup {
     items: NavItem[]
 }
 
-const navGroups: NavGroup[] = [
-    {
-        title: 'Overview',
-        items: [
-            { label: 'Community Hub', to: { name: 'member-dashboard' }, iconKey: 'dashboard' },
-            { label: 'Announcements', to: { name: 'member-announcements' }, iconKey: 'announcements' },
-        ],
-    },
-    {
-        title: 'Community',
-        items: [
-            { label: 'Devotional Wall', to: { name: 'member-devotional' }, iconKey: 'devotional' },
-            { label: 'Prayer Requests', to: { name: 'member-prayer-requests' }, iconKey: 'prayer' },
-            { label: 'Directory', to: { name: 'member-directory' }, iconKey: 'directory' },
-        ],
-    },
-    {
-        title: 'My Church Life',
-        items: [
-            { label: 'Events', to: { name: 'member-events' }, iconKey: 'events' },
-            { label: 'Attendance', to: { name: 'member-attendance' }, iconKey: 'attendance' },
-            { label: 'Programs', to: { name: 'member-programs' }, iconKey: 'programs' },
-        ],
-    },
-]
+const navGroups = computed<NavGroup[]>(() => {
+    const groups: NavGroup[] = [
+        {
+            title: 'Overview',
+            items: [
+                { label: 'Community Hub', to: { name: 'member-dashboard' }, iconKey: 'dashboard' },
+                { label: 'Announcements', to: { name: 'member-announcements' }, iconKey: 'announcements' },
+            ],
+        },
+    ]
+
+    // Pending users get view-only access — hide Devotional Wall, Prayer Requests, and Directory
+    if (!auth.isPending) {
+        groups.push({
+            title: 'Community',
+            items: [
+                { label: 'Devotional Wall', to: { name: 'member-devotional' }, iconKey: 'devotional' },
+                { label: 'Prayer Requests', to: { name: 'member-prayer-requests' }, iconKey: 'prayer' },
+                { label: 'Directory', to: { name: 'member-directory' }, iconKey: 'directory' },
+            ],
+        })
+    }
+
+    const churchLifeItems: NavItem[] = [
+        { label: 'Attendance', to: { name: 'member-attendance' }, iconKey: 'attendance' },
+    ]
+    if (!auth.isPending) {
+        churchLifeItems.unshift({ label: 'Events', to: { name: 'member-events' }, iconKey: 'events' })
+        churchLifeItems.push({ label: 'Programs', to: { name: 'member-programs' }, iconKey: 'programs' })
+    }
+    groups.push({ title: 'My Church Life', items: churchLifeItems })
+
+    return groups
+})
 
 // View switcher
 type ViewMode = 'member' | 'admin' | 'ministry'
@@ -285,7 +385,7 @@ async function handleLogout() {
                     </svg>
                 </button>
                 <div class="flex-1" />
-                <button @click="showQr = true" class="p-2 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-navy transition-colors" title="My QR Code">
+                <button v-if="!auth.isPending" @click="showQr = true" class="p-2 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-navy transition-colors" title="My QR Code">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 013.75 9.375v-4.5zM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5zM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5z" />
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M6.75 6.75h.75v.75h-.75v-.75zM6.75 16.5h.75v.75h-.75v-.75zM16.5 6.75h.75v.75h-.75v-.75zM13.5 13.5h.75v.75h-.75v-.75zM13.5 19.5h.75v.75h-.75v-.75zM19.5 13.5h.75v.75h-.75v-.75zM19.5 19.5h.75v.75h-.75v-.75zM16.5 16.5h.75v.75h-.75v-.75z" />
@@ -311,6 +411,72 @@ async function handleLogout() {
     </div>
 
     <QrCodeModal :open="showQr" @close="showQr = false" />
+
+    <!-- Approved-member welcome tour -->
+    <Teleport to="body">
+        <div
+            v-if="showApprovedTour"
+            class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+            @click.self="finishApprovedTour"
+        >
+            <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+                <div class="px-6 pt-6 pb-2 flex items-center justify-between">
+                    <div class="flex items-center gap-1.5">
+                        <span
+                            v-for="(_, i) in approvedTourSteps"
+                            :key="i"
+                            class="h-1.5 rounded-full transition-all"
+                            :class="i === approvedTourStep ? 'w-6 bg-navy' : i < approvedTourStep ? 'w-1.5 bg-navy/40' : 'w-1.5 bg-gray-200'"
+                        />
+                    </div>
+                    <button class="text-gray-400 hover:text-gray-600 text-sm font-medium" @click="finishApprovedTour">
+                        Skip
+                    </button>
+                </div>
+
+                <div class="px-6 pt-2 pb-6 text-center" :class="approvedTourAccent.bg">
+                    <div
+                        class="w-16 h-16 rounded-2xl mx-auto flex items-center justify-center mb-4"
+                        :class="approvedTourAccent.iconBg"
+                    >
+                        <svg class="w-8 h-8" :class="approvedTourAccent.iconText" fill="none" stroke="currentColor" viewBox="0 0 24 24" v-html="approvedTourCurrent.icon" />
+                    </div>
+                    <h3 class="text-xl font-heading font-bold text-navy mb-2">{{ approvedTourCurrent.title }}</h3>
+                    <p class="text-sm text-gray-600 leading-relaxed">{{ approvedTourCurrent.body }}</p>
+                </div>
+
+                <div class="px-6 py-4 flex items-center justify-between gap-3 border-t border-gray-100">
+                    <button
+                        v-if="approvedTourStep > 0"
+                        class="px-4 py-2.5 text-gray-500 hover:text-gray-700 text-sm font-medium"
+                        @click="approvedTourStep--"
+                    >
+                        Back
+                    </button>
+                    <span v-else class="text-xs text-gray-400">
+                        Step {{ approvedTourStep + 1 }} of {{ approvedTourSteps.length }}
+                    </span>
+
+                    <div class="flex items-center gap-2 ml-auto">
+                        <button
+                            v-if="approvedTourCurrent.cta"
+                            class="px-4 py-2.5 text-sm font-semibold text-navy hover:text-navy-700"
+                            @click="goToTourCta(approvedTourCurrent.cta.to)"
+                        >
+                            {{ approvedTourCurrent.cta.label }}
+                        </button>
+                        <button
+                            class="px-5 py-2.5 text-white text-sm font-semibold rounded-lg transition"
+                            :class="approvedTourAccent.btn"
+                            @click="nextApprovedTourStep"
+                        >
+                            {{ approvedTourLastStep ? 'Get Started' : 'Next' }}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </Teleport>
 
     <!-- Onboarding / Pending Modal -->
     <Teleport to="body">

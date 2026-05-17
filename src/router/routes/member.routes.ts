@@ -23,7 +23,8 @@ export const memberRoutes: RouteRecordRaw[] = [
             {
                 path: 'qr-code',
                 name: 'member-qr',
-                component: () => import('@/pages/member/QRCodePage.vue')
+                component: () => import('@/pages/member/QRCodePage.vue'),
+                meta: { requiresApproved: true }
             },
             {
                 path: 'attendance',
@@ -42,6 +43,7 @@ export const memberRoutes: RouteRecordRaw[] = [
             },
             {
                 path: 'events',
+                meta: { requiresApproved: true },
                 children: [
                     {
                         path: '',
@@ -59,12 +61,14 @@ export const memberRoutes: RouteRecordRaw[] = [
             {
                 path: 'devotional',
                 name: 'member-devotional',
-                component: () => import('@/pages/member/DevotionalWallPage.vue')
+                component: () => import('@/pages/member/DevotionalWallPage.vue'),
+                meta: { requiresApproved: true }
             },
             {
                 path: 'prayer-requests',
                 name: 'member-prayer-requests',
-                component: () => import('@/pages/member/PrayerRequestsPage.vue')
+                component: () => import('@/pages/member/PrayerRequestsPage.vue'),
+                meta: { requiresApproved: true }
             },
             {
                 path: 'scripture',
@@ -74,7 +78,8 @@ export const memberRoutes: RouteRecordRaw[] = [
             {
                 path: 'programs',
                 name: 'member-programs',
-                component: () => import('@/pages/member/ProgramsPage.vue')
+                component: () => import('@/pages/member/ProgramsPage.vue'),
+                meta: { requiresApproved: true }
             },
             {
                 path: 'announcements',
@@ -83,6 +88,7 @@ export const memberRoutes: RouteRecordRaw[] = [
             },
             {
                 path: 'directory',
+                meta: { requiresApproved: true },
                 children: [
                     {
                         path: '',

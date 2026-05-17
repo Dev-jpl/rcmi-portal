@@ -85,6 +85,16 @@ export const useAdminStore = defineStore('admin', () => {
             .update({ is_active: 'Y' })
             .eq('id', profile.user_id)
 
+        // Fire approval email (in-app notification is handled by the
+        // on_member_profile_approved DB trigger). Failures don't block approval.
+        if (profile.email) {
+            supabase.functions
+                .invoke('send-approval-email', {
+                    body: { email: profile.email, firstName: profile.first_name },
+                })
+                .catch((e) => console.warn('send-approval-email failed:', e))
+        }
+
         await fetchMembers()
         return { success: true }
     }

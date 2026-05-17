@@ -214,8 +214,8 @@ function getRsvpCount(eventId: number) {
                         {{ auth.profile?.satellite_church_name ?? 'RCMI' }} Community Hub
                     </p>
                 </div>
-                <!-- QR Quick Access -->
-                <button @click="showQr = true"
+                <!-- QR Quick Access (hidden for pending users) -->
+                <button v-if="!auth.isPending" @click="showQr = true"
                     class="shrink-0 flex flex-col items-center gap-1.5 px-4 py-3 rounded-lg bg-white/10 hover:bg-white/20 border border-white/10 backdrop-blur-sm transition-all duration-200 group cursor-pointer">
                     <svg class="w-8 h-8 text-white/80 group-hover:text-white transition-colors" fill="none"
                         stroke="currentColor" viewBox="0 0 24 24">
@@ -369,8 +369,8 @@ function getRsvpCount(eventId: number) {
                 <div class="grid col-span-12 lg:col-span-4 gap-6">
                     <!-- Right sidebar -->
                     <div class="space-y-6">
-                        <!-- Quick Access: Devotional Wall -->
-                        <router-link :to="{ name: 'member-devotional' }"
+                        <!-- Quick Access: Devotional Wall (hidden for pending users) -->
+                        <router-link v-if="!auth.isPending" :to="{ name: 'member-devotional' }"
                             class="group block bg-gradient-to-br from-violet-50 to-purple-50 rounded-xl border border-violet-200/60 p-5 hover:shadow-md hover:border-violet-300 transition-all">
                             <div class="flex items-center gap-3">
                                 <div
@@ -388,8 +388,8 @@ function getRsvpCount(eventId: number) {
                             </div>
                         </router-link>
 
-                        <!-- Quick Access: Prayer Wall -->
-                        <router-link :to="{ name: 'member-prayer-requests' }"
+                        <!-- Quick Access: Prayer Wall (hidden for pending users) -->
+                        <router-link v-if="!auth.isPending" :to="{ name: 'member-prayer-requests' }"
                             class="group block bg-gradient-to-br from-sky-50 to-blue-50 rounded-xl border border-sky-200/60 p-5 hover:shadow-md hover:border-sky-300 transition-all">
                             <div class="flex items-center gap-3">
                                 <div
@@ -407,8 +407,8 @@ function getRsvpCount(eventId: number) {
                             </div>
                         </router-link>
 
-                        <!-- Upcoming Events -->
-                        <div class="bg-white rounded-xl border border-gray-200 p-5 sm:p-6">
+                        <!-- Upcoming Events (hidden for pending users) -->
+                        <div v-if="!auth.isPending" class="bg-white rounded-xl border border-gray-200 p-5 sm:p-6">
                             <div class="flex items-center justify-between mb-4">
                                 <h2 class="font-heading font-semibold text-navy text-lg">Upcoming Events</h2>
                                 <router-link :to="{ name: 'member-events' }"
@@ -500,6 +500,63 @@ function getRsvpCount(eventId: number) {
                                         :class="b.daysUntil === 0 ? 'bg-gold/15 text-gold-700' : 'bg-gray-50 text-gray-500 border border-gray-100'">
                                         {{ b.daysUntil === 0 ? 'Today!' : `${b.daysUntil}d` }}
                                     </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Approval Status -->
+                        <div
+                            v-if="auth.profile?.status"
+                            class="rounded-xl border p-5 sm:p-6"
+                            :class="auth.isPending
+                                ? 'bg-amber-50 border-amber-200'
+                                : auth.isRejected
+                                    ? 'bg-red-50 border-red-200'
+                                    : 'bg-emerald-50 border-emerald-200'"
+                        >
+                            <div class="flex items-center gap-3">
+                                <div
+                                    class="w-10 h-10 rounded-lg flex items-center justify-center shrink-0"
+                                    :class="auth.isPending
+                                        ? 'bg-amber-100'
+                                        : auth.isRejected
+                                            ? 'bg-red-100'
+                                            : 'bg-emerald-100'"
+                                >
+                                    <svg v-if="auth.isPending" class="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    <svg v-else-if="auth.isRejected" class="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+                                    </svg>
+                                    <svg v-else class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                </div>
+                                <div class="flex-1 min-w-0">
+                                    <h2
+                                        class="font-heading font-semibold text-base"
+                                        :class="auth.isPending
+                                            ? 'text-amber-900'
+                                            : auth.isRejected
+                                                ? 'text-red-900'
+                                                : 'text-emerald-900'"
+                                    >
+                                        Account Status:
+                                        {{ auth.isPending ? 'Pending Approval' : auth.isRejected ? 'Rejected' : 'Approved' }}
+                                    </h2>
+                                    <p
+                                        class="text-xs mt-0.5"
+                                        :class="auth.isPending
+                                            ? 'text-amber-700/80'
+                                            : auth.isRejected
+                                                ? 'text-red-700/80'
+                                                : 'text-emerald-700/80'"
+                                    >
+                                        <template v-if="auth.isPending">Your account is awaiting administrator approval. Some features are limited.</template>
+                                        <template v-else-if="auth.isRejected">Your account has been declined. Please contact your church administrator.</template>
+                                        <template v-else>You have full access to the RCMI community.</template>
+                                    </p>
                                 </div>
                             </div>
                         </div>
