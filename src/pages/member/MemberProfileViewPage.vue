@@ -20,6 +20,9 @@ const thisMonthAttendance = ref(0)
 const enrolledPrograms = ref(0)
 const completedPrograms = ref(0)
 const devotionStreak = ref(0)
+const longestDevotionStreak = ref(0)
+const totalDevotionDays = ref(0)
+const weekActivity = ref<{ date: string; label: string; short: string; isToday: boolean; posted: boolean }[]>([])
 
 const isOwnProfile = computed(() => auth.session?.user?.id === props.userId)
 
@@ -164,36 +167,68 @@ async function fetchDevotionStreak() {
         .order('created_at', { ascending: false })
         .limit(365)
 
-    if (!data?.length) return
+    const today = new Date()
+    const todayStr = toDateStr(today)
+    const yesterdayStr = toDateStr(addDays(today, -1))
+    const postedSet = new Set<string>((data ?? []).map(d => d.created_at.split('T')[0]))
 
-    const dates = [...new Set(data.map(d => d.created_at.split('T')[0]))].sort().reverse()
-    const today = new Date().toISOString().split('T')[0]
-    let streak = 0
-    let checkDate = today
+    totalDevotionDays.value = postedSet.size
 
-    for (const date of dates) {
-        if (date === checkDate) {
-            streak++
-            const prev = new Date(checkDate + 'T00:00:00')
-            prev.setDate(prev.getDate() - 1)
-            checkDate = prev.toISOString().split('T')[0]
-        } else if (streak === 0) {
-            const yesterday = new Date(today + 'T00:00:00')
-            yesterday.setDate(yesterday.getDate() - 1)
-            if (date === yesterday.toISOString().split('T')[0]) {
-                streak = 1
-                const prev = new Date(date + 'T00:00:00')
-                prev.setDate(prev.getDate() - 1)
-                checkDate = prev.toISOString().split('T')[0]
-            } else {
-                break
-            }
-        } else {
-            break
-        }
+    // Build last-7-days activity (oldest → newest, ending today)
+    const week: typeof weekActivity.value = []
+    for (let i = 6; i >= 0; i--) {
+        const d = addDays(today, -i)
+        const ds = toDateStr(d)
+        week.push({
+            date: ds,
+            label: d.toLocaleDateString('en', { weekday: 'long' }),
+            short: d.toLocaleDateString('en', { weekday: 'narrow' }),
+            isToday: ds === todayStr,
+            posted: postedSet.has(ds),
+        })
     }
+    weekActivity.value = week
 
-    devotionStreak.value = streak
+    // Current streak — count back from today (allow yesterday as anchor if no post today yet)
+    let current = 0
+    let cursor = postedSet.has(todayStr)
+        ? todayStr
+        : postedSet.has(yesterdayStr) ? yesterdayStr : null
+
+    while (cursor && postedSet.has(cursor)) {
+        current++
+        cursor = toDateStr(addDays(new Date(cursor + 'T00:00:00'), -1))
+    }
+    devotionStreak.value = current
+
+    // Longest ever streak — sort dates ascending and walk consecutive runs
+    const sorted = Array.from(postedSet).sort()
+    let longest = 0
+    let run = 0
+    let prev: string | null = null
+    for (const ds of sorted) {
+        if (prev && ds === toDateStr(addDays(new Date(prev + 'T00:00:00'), 1))) {
+            run++
+        } else {
+            run = 1
+        }
+        if (run > longest) longest = run
+        prev = ds
+    }
+    longestDevotionStreak.value = longest
+}
+
+function addDays(d: Date, n: number): Date {
+    const out = new Date(d)
+    out.setDate(out.getDate() + n)
+    return out
+}
+
+function toDateStr(d: Date): string {
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${y}-${m}-${day}`
 }
 
 async function giveBadge(badgeId: number) {
@@ -381,6 +416,74 @@ function badgeEmoji(icon: string) {
                             </svg>
                             {{ devotionStreak }}d streak
                         </span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Devotional Streak (Strava-style weekly tracker) -->
+            <div class="bg-gradient-to-br from-violet-50 via-fuchsia-50 to-orange-50 rounded-xl border border-violet-200/60 p-5 sm:p-6 mb-6">
+                <div class="flex items-start justify-between gap-4 mb-5">
+                    <div class="flex items-center gap-3">
+                        <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center shrink-0 shadow-sm">
+                            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.362 5.214A8.252 8.252 0 0112 21 8.25 8.25 0 016.038 7.048 8.287 8.287 0 009 9.6a8.983 8.983 0 013.361-6.867 8.21 8.21 0 003 2.48z" />
+                            </svg>
+                        </div>
+                        <div>
+                            <h2 class="font-heading font-bold text-violet-900 text-base sm:text-lg leading-tight">Devotional Streak</h2>
+                            <p class="text-xs text-violet-700/70 mt-0.5">Posts this week</p>
+                        </div>
+                    </div>
+                    <div class="text-right shrink-0">
+                        <p class="text-[10px] uppercase tracking-wider text-violet-700/60 font-semibold">Current</p>
+                        <p class="font-heading font-bold text-violet-900 leading-none">
+                            <span class="text-3xl sm:text-4xl">{{ devotionStreak }}</span>
+                            <span class="text-sm text-violet-700/70 ml-1">{{ devotionStreak === 1 ? 'day' : 'days' }}</span>
+                        </p>
+                    </div>
+                </div>
+
+                <!-- 7-day strip -->
+                <div class="grid grid-cols-7 gap-1.5 sm:gap-2 mb-5">
+                    <div
+                        v-for="day in weekActivity"
+                        :key="day.date"
+                        class="flex flex-col items-center gap-1.5"
+                        :title="`${day.label} · ${day.date}${day.posted ? ' · posted' : ''}`"
+                    >
+                        <span class="text-[10px] uppercase font-semibold text-violet-700/50 tracking-wider">{{ day.short }}</span>
+                        <div
+                            class="w-full aspect-square rounded-md flex items-center justify-center transition-all"
+                            :class="[
+                                day.posted
+                                    ? 'bg-gradient-to-br from-violet-500 to-fuchsia-500 shadow-sm'
+                                    : 'bg-white/70 border border-dashed border-violet-200',
+                                day.isToday && !day.posted ? 'ring-2 ring-violet-400/40' : '',
+                            ]"
+                        >
+                            <svg v-if="day.posted" class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M4.5 12.75l6 6 9-13.5" />
+                            </svg>
+                            <span v-else-if="day.isToday" class="w-1.5 h-1.5 rounded-full bg-violet-400" />
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Stats row -->
+                <div class="grid grid-cols-2 gap-3 pt-4 border-t border-violet-200/50">
+                    <div>
+                        <p class="text-[10px] uppercase tracking-wider text-violet-700/60 font-semibold">Longest Streak</p>
+                        <p class="font-heading font-bold text-violet-900 text-xl leading-tight mt-0.5">
+                            {{ longestDevotionStreak }}
+                            <span class="text-xs text-violet-700/60 font-medium">{{ longestDevotionStreak === 1 ? 'day' : 'days' }}</span>
+                        </p>
+                    </div>
+                    <div>
+                        <p class="text-[10px] uppercase tracking-wider text-violet-700/60 font-semibold">Total Days</p>
+                        <p class="font-heading font-bold text-violet-900 text-xl leading-tight mt-0.5">
+                            {{ totalDevotionDays }}
+                            <span class="text-xs text-violet-700/60 font-medium">posted</span>
+                        </p>
                     </div>
                 </div>
             </div>

@@ -38,6 +38,7 @@ const avatarMap = ref<Map<string, string | null>>(new Map())
 const newContent = ref('')
 const posting = ref(false)
 const loading = ref(true)
+const postError = ref<string | null>(null)
 
 // Comment state per devotional
 const commentInputs = ref<Map<string, string>>(new Map())
@@ -85,19 +86,14 @@ async function fetchDevotionals() {
   loading.value = true
   const { data } = await supabase
     .from('tbl_devotionals')
-    .select('*, author:tbl_users(first_name, last_name)')
+    .select('*')
     .order('created_at', { ascending: false })
     .limit(50)
 
-  devotionals.value = (data ?? []).map((d: any) => {
-    const author = d.author as { first_name: string | null; last_name: string | null } | null
-    return {
-      ...d,
-      author_name: author
-        ? [author.first_name, author.last_name].filter(Boolean).join(' ')
-        : 'Unknown Member',
-    }
-  })
+  devotionals.value = (data ?? []).map((d: any) => ({
+    ...d,
+    author_name: (d.author_name as string | null)?.trim() || 'Unknown Member',
+  }))
   if (devotionals.value.length) {
     await Promise.all([fetchReactions(), fetchComments()])
     await fetchAvatars()
@@ -162,20 +158,20 @@ async function fetchComments() {
 
   const { data } = await supabase
     .from('tbl_comments')
-    .select('*, author:tbl_users(first_name, last_name)')
-    .in('devotional_id', ids)
+    .select('*')
+    .eq('parent_type', 'devotional')
+    .in('parent_id', ids)
     .order('created_at', { ascending: true })
 
   const map = new Map<string, Comment[]>()
-  for (const c of data ?? []) {
-    const list = map.get(c.devotional_id) ?? []
+  for (const c of (data ?? []) as any[]) {
+    const list = map.get(c.parent_id) ?? []
     list.push({
       ...c,
-      author_name: c.author
-        ? [c.author.first_name, c.author.last_name].filter(Boolean).join(' ')
-        : 'Unknown Member',
+      devotional_id: c.parent_id,
+      author_name: (c.author_name as string | null)?.trim() || 'Unknown Member',
     })
-    map.set(c.devotional_id, list)
+    map.set(c.parent_id, list)
   }
   comments.value = map
 }
@@ -225,12 +221,19 @@ async function postComment(parentId: string) {
   const text = getCommentInput(parentId)?.trim()
   if (!text || !auth.session?.user) return
 
+  const authorName = [auth.user?.first_name, auth.user?.last_name]
+    .filter(Boolean)
+    .join(' ')
+    .trim() || auth.user?.email || 'Anonymous'
+
   commentPosting.value.add(parentId)
   await supabase.from('tbl_comments').insert({
-    devotional_id: parentId,
+    parent_type: 'devotional',
+    parent_id: parentId,
     user_id: auth.session.user.id,
     content: text,
-  })
+    author_name: authorName,
+  } as never)
 
   commentInputs.value.set(parentId, '')
   commentPosting.value.delete(parentId)
@@ -265,11 +268,25 @@ async function post() {
   if (!newContent.value.trim() || !auth.session?.user) return
 
   posting.value = true
+  postError.value = null
 
-  await supabase.from('tbl_devotionals').insert({
+  const authorName = [auth.user?.first_name, auth.user?.last_name]
+    .filter(Boolean)
+    .join(' ')
+    .trim() || auth.user?.email || 'Anonymous'
+
+  const { error } = await supabase.from('tbl_devotionals').insert({
     user_id: auth.session.user.id,
     content: newContent.value.trim(),
-  })
+    author_name: authorName,
+  } as never)
+
+  if (error) {
+    console.error('Failed to post devotional:', error)
+    postError.value = error.message
+    posting.value = false
+    return
+  }
 
   newContent.value = ''
   posting.value = false
@@ -342,7 +359,8 @@ async function confirmDelete() {
     await supabase
       .from('tbl_comments')
       .delete()
-      .eq('devotional_id', id)
+      .eq('parent_type', 'devotional')
+      .eq('parent_id', id)
     await supabase.from('tbl_devotionals').delete().eq('id', id)
     devotionals.value = devotionals.value.filter((d) => d.id !== id)
   } else {
@@ -411,6 +429,7 @@ onUnmounted(() => {
         rows="3"
         class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-navy/30 resize-none"
       />
+      <p v-if="postError" class="text-xs text-red-600 mt-2">{{ postError }}</p>
       <div class="flex justify-end mt-2">
         <button
           :disabled="!newContent.trim() || posting"
