@@ -530,7 +530,7 @@ function markTouched(field: string) {
             <input
               id="reg-confirm"
               v-model="confirmPassword"
-              type="password"
+              :type="showPassword ? 'text' : 'password'"
               autocomplete="new-password"
               class="w-full pl-11 pr-3 py-3 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-navy/20 focus:border-navy transition-all"
               :class="

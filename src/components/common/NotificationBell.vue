@@ -9,6 +9,10 @@ const open = ref(false)
 
 function toggle() {
     open.value = !open.value
+    // Opening the panel counts as "seeing" the notifications — clear the badge.
+    if (open.value && store.unreadCount > 0) {
+        store.markAllRead()
+    }
 }
 
 function handleClick(n: { id: string; link: string | null }) {

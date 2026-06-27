@@ -15,13 +15,23 @@ const search = ref('')
 const statusFilter = ref('')
 const churchFilter = ref<number | null>(null)
 const lastAttendance = ref<Map<string, string>>(new Map())
-const rejectReason = ref('')
 const rejectTarget = ref<MembersProfile | null>(null)
 const showRejectModal = ref(false)
 const deleteTarget = ref<MembersProfile | null>(null)
 const showDeleteModal = ref(false)
 const actionLoading = ref<number | null>(null)
 const message = ref<{ type: 'success' | 'error'; text: string } | null>(null)
+
+const showAddModal = ref(false)
+const addLoading = ref(false)
+const addError = ref('')
+const addForm = ref({
+    firstName: '',
+    lastName: '',
+    email: '',
+    password: '',
+    satelliteChurchId: null as number | null,
+})
 
 const churches = ref<{ id: number; church_name: string }[]>([])
 
@@ -96,7 +106,6 @@ async function handleApprove(member: MembersProfile) {
 
 function openReject(member: MembersProfile) {
     rejectTarget.value = member
-    rejectReason.value = ''
     showRejectModal.value = true
 }
 
@@ -104,9 +113,9 @@ async function handleReject() {
     if (!rejectTarget.value) return
     actionLoading.value = rejectTarget.value.id
     message.value = null
-    const result = await admin.rejectMember(rejectTarget.value, rejectReason.value)
+    const result = await admin.rejectMember(rejectTarget.value)
     if (result.success) {
-        message.value = { type: 'success', text: `${rejectTarget.value.first_name} rejected.` }
+        message.value = { type: 'success', text: `${rejectTarget.value.first_name} rejected and account removed.` }
     } else {
         message.value = { type: 'error', text: result.error ?? 'Failed to reject.' }
     }
@@ -153,6 +162,50 @@ async function handleDelete() {
     actionLoading.value = null
 }
 
+function openAdd() {
+    addForm.value = {
+        firstName: '',
+        lastName: '',
+        email: '',
+        password: '',
+        satelliteChurchId: admin.getChurchScope(),
+    }
+    addError.value = ''
+    showAddModal.value = true
+}
+
+async function handleAdd() {
+    addError.value = ''
+    const f = addForm.value
+    if (!f.firstName.trim() || !f.lastName.trim() || !f.email.trim() || !f.password || !f.satelliteChurchId) {
+        addError.value = 'Please complete all fields.'
+        return
+    }
+    if (f.password.length < 6) {
+        addError.value = 'Password must be at least 6 characters.'
+        return
+    }
+
+    addLoading.value = true
+    const church = churches.value.find((c) => c.id === f.satelliteChurchId)
+    const result = await admin.addMember({
+        email: f.email.trim(),
+        password: f.password,
+        firstName: f.firstName.trim(),
+        lastName: f.lastName.trim(),
+        satelliteChurchId: f.satelliteChurchId,
+        satelliteChurchName: church?.church_name,
+    })
+    addLoading.value = false
+
+    if (result.success) {
+        message.value = { type: 'success', text: `${f.firstName} ${f.lastName} added and approved.` }
+        showAddModal.value = false
+    } else {
+        addError.value = result.error ?? 'Failed to add member.'
+    }
+}
+
 function formatDate(d: string | null) {
     if (!d) return '—'
     return new Date(d).toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric' })
@@ -166,15 +219,26 @@ function formatDate(d: string | null) {
                 <h1 class="text-2xl font-heading font-bold text-navy">Members</h1>
                 <p class="text-sm text-gray-500 mt-1">{{ filtered.length }} member{{ filtered.length !== 1 ? 's' : '' }}</p>
             </div>
-            <button
-                class="inline-flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-300 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors"
-                @click="exportToExcel"
-            >
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                Export Excel
-            </button>
+            <div class="flex items-center gap-2">
+                <button
+                    class="inline-flex items-center gap-2 px-4 py-2.5 bg-navy text-white text-sm font-semibold rounded-lg hover:bg-navy-700 transition-colors"
+                    @click="openAdd"
+                >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zM3 19.235v-.11a6.375 6.375 0 0112.75 0v.109A12.318 12.318 0 019.374 21c-2.331 0-4.512-.645-6.374-1.766z" />
+                    </svg>
+                    Add Member
+                </button>
+                <button
+                    class="inline-flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-300 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors"
+                    @click="exportToExcel"
+                >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    Export Excel
+                </button>
+            </div>
         </div>
 
         <!-- Filters -->
@@ -318,6 +382,92 @@ function formatDate(d: string | null) {
             </div>
         </div>
 
+        <!-- Add Member Modal -->
+        <Teleport to="body">
+            <div
+                v-if="showAddModal"
+                class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+                @click.self="showAddModal = false"
+            >
+                <div class="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+                    <h3 class="text-lg font-heading font-bold text-navy mb-1">Add Member</h3>
+                    <p class="text-sm text-gray-500 mb-4">
+                        Creates an approved account. Share the email and password with the member so they can sign in.
+                    </p>
+
+                    <form class="space-y-3" @submit.prevent="handleAdd">
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 mb-1">First Name</label>
+                                <input
+                                    v-model="addForm.firstName"
+                                    type="text"
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-navy/30 focus:border-navy"
+                                />
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 mb-1">Last Name</label>
+                                <input
+                                    v-model="addForm.lastName"
+                                    type="text"
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-navy/30 focus:border-navy"
+                                />
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 mb-1">Email</label>
+                            <input
+                                v-model="addForm.email"
+                                type="email"
+                                autocomplete="off"
+                                class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-navy/30 focus:border-navy"
+                            />
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 mb-1">Temporary Password</label>
+                            <input
+                                v-model="addForm.password"
+                                type="text"
+                                autocomplete="off"
+                                placeholder="At least 6 characters"
+                                class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-navy/30 focus:border-navy"
+                            />
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 mb-1">Satellite Church</label>
+                            <select
+                                v-model="addForm.satelliteChurchId"
+                                :disabled="!admin.isSuperAdmin"
+                                class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white disabled:bg-gray-100 disabled:text-gray-500 focus:outline-none focus:ring-2 focus:ring-navy/30"
+                            >
+                                <option :value="null" disabled>Select a church</option>
+                                <option v-for="c in churches" :key="c.id" :value="c.id">{{ c.church_name }}</option>
+                            </select>
+                        </div>
+
+                        <p v-if="addError" class="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{{ addError }}</p>
+
+                        <div class="flex justify-end gap-3 pt-1">
+                            <button
+                                type="button"
+                                class="px-4 py-2 border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50"
+                                @click="showAddModal = false"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="submit"
+                                :disabled="addLoading"
+                                class="px-4 py-2 bg-navy text-white text-sm font-semibold rounded-lg hover:bg-navy-700 disabled:opacity-50"
+                            >
+                                {{ addLoading ? 'Adding...' : 'Add Member' }}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </Teleport>
+
         <!-- Reject Modal -->
         <Teleport to="body">
             <div
@@ -326,28 +476,27 @@ function formatDate(d: string | null) {
                 @click.self="showRejectModal = false"
             >
                 <div class="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
-                    <h3 class="text-lg font-heading font-bold text-navy mb-4">Reject Member</h3>
-                    <p class="text-sm text-gray-600 mb-3">
-                        Rejecting <strong>{{ rejectTarget?.first_name }} {{ rejectTarget?.last_name }}</strong>
+                    <h3 class="text-lg font-heading font-bold text-navy mb-3">Reject Member</h3>
+                    <p class="text-sm text-gray-600 mb-2">
+                        Reject <strong>{{ rejectTarget?.first_name }} {{ rejectTarget?.last_name }}</strong>?
                     </p>
-                    <textarea
-                        v-model="rejectReason"
-                        rows="3"
-                        placeholder="Reason for rejection (optional)..."
-                        class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-navy/30 resize-none"
-                    />
+                    <p class="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2 mb-4">
+                        This permanently deletes their account and sign-in — they would need to register again. This cannot be undone.
+                    </p>
                     <div class="flex justify-end gap-3 mt-4">
                         <button
+                            :disabled="actionLoading === rejectTarget?.id"
                             class="px-4 py-2 border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50"
                             @click="showRejectModal = false"
                         >
                             Cancel
                         </button>
                         <button
-                            class="px-4 py-2 bg-red-500 text-white text-sm font-semibold rounded-lg hover:bg-red-600"
+                            :disabled="actionLoading === rejectTarget?.id"
+                            class="px-4 py-2 bg-red-500 text-white text-sm font-semibold rounded-lg hover:bg-red-600 disabled:opacity-50"
                             @click="handleReject"
                         >
-                            Reject
+                            {{ actionLoading === rejectTarget?.id ? 'Removing...' : 'Reject & Remove' }}
                         </button>
                     </div>
                 </div>

@@ -52,9 +52,6 @@ const friendlyError = computed(() => {
     if (e.includes('invalid login credentials') || e.includes('invalid_credentials')) {
         return 'Incorrect email or password. Please check your credentials and try again.'
     }
-    if (e.includes('email not confirmed')) {
-        return 'Please verify your email address first. Check your inbox for a confirmation link.'
-    }
     if (e.includes('too many requests') || e.includes('rate limit')) {
         return 'Too many login attempts. Please wait a moment before trying again.'
     }

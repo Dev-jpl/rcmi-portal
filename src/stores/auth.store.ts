@@ -106,6 +106,55 @@ export const useAuthStore = defineStore('auth', () => {
         }))
     }
 
+    // Manually create the tbl_users + tbl_members_profile rows for a freshly
+    // registered auth user. Previously handled by the handle_new_user DB trigger,
+    // which proved unreliable — so we do it client-side instead. Requires an active
+    // session: RLS only allows inserting rows where id/user_id = auth.uid().
+    // Idempotent (ignoreDuplicates) so it's safe if the trigger ever also fires
+    // or the call is retried.
+    async function createMemberRecords(userId: string, payload: {
+        email: string
+        firstName: string
+        middleName?: string
+        lastName: string
+        satelliteChurchId: number
+        satelliteChurchName?: string
+    }) {
+        const { error: userError } = await supabase
+            .from('tbl_users')
+            .upsert(
+                {
+                    id: userId,
+                    email: payload.email,
+                    first_name: payload.firstName,
+                    middle_name: payload.middleName ?? null,
+                    last_name: payload.lastName,
+                    role_id: 6,
+                    role_type: 'member',
+                    is_active: 'P',
+                },
+                { onConflict: 'id', ignoreDuplicates: true },
+            )
+        if (userError) throw userError
+
+        const { error: profileError } = await supabase
+            .from('tbl_members_profile')
+            .upsert(
+                {
+                    user_id: userId,
+                    email: payload.email,
+                    first_name: payload.firstName,
+                    middle_name: payload.middleName ?? null,
+                    last_name: payload.lastName,
+                    satellite_church_id: payload.satelliteChurchId,
+                    satellite_church_name: payload.satelliteChurchName ?? null,
+                    status: 'pending',
+                },
+                { onConflict: 'user_id', ignoreDuplicates: true },
+            )
+        if (profileError) throw profileError
+    }
+
     async function register(payload: {
         email: string
         password: string
@@ -119,15 +168,14 @@ export const useAuthStore = defineStore('auth', () => {
         error.value = null
 
         try {
-            // 1. Create Supabase Auth user — pass registration data as metadata so the
-            //    server-side trigger (handle_new_user) can create tbl_users and
-            //    tbl_members_profile with SECURITY DEFINER, bypassing RLS.
-            const siteUrl = import.meta.env.VITE_APP_URL || window.location.origin
+            // 1. Create the Supabase Auth user. Registration data is still passed as
+            //    metadata (used by the email-confirmation backfill path), but the
+            //    tbl_users / tbl_members_profile rows are now created manually below
+            //    rather than relying on the handle_new_user trigger.
             const { data: authData, error: authError } = await supabase.auth.signUp({
                 email: payload.email,
                 password: payload.password,
                 options: {
-                    emailRedirectTo: `${siteUrl}/auth/callback`,
                     data: {
                         first_name: payload.firstName,
                         last_name: payload.lastName,
@@ -148,10 +196,24 @@ export const useAuthStore = defineStore('auth', () => {
                 throw new Error('An account with this email has already been registered.')
             }
 
-            // The trigger handle_new_user fires on auth.users INSERT and creates the
-            // tbl_users and tbl_members_profile rows server-side — no client inserts needed.
+            // 2. Obtain a session. When GoTrue email confirmation is enabled, signUp
+            //    returns no session — but the auto_confirm_email DB trigger (migration
+            //    013) marks the account confirmed on insert, so we can sign in straight
+            //    away to get one. If confirmation is disabled, signUp already returned a
+            //    session and this sign-in is skipped.
             session.value = authData.session
-            if (authData.session) {
+            if (!session.value) {
+                const { data: signInData } = await supabase.auth.signInWithPassword({
+                    email: payload.email,
+                    password: payload.password,
+                })
+                session.value = signInData.session
+            }
+
+            // 3. Create the app-level rows. Requires the session above so RLS
+            //    (id/user_id = auth.uid()) permits the insert.
+            if (session.value) {
+                await createMemberRecords(authData.user.id, payload)
                 await fetchUserData(authData.user.id)
             }
 
@@ -268,6 +330,7 @@ export const useAuthStore = defineStore('auth', () => {
         // actions
         resolveSession,
         fetchUserData,
+        createMemberRecords,
         register,
         login,
         forgotPassword,

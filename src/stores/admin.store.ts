@@ -1,8 +1,9 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { createClient } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from './auth.store'
-import type { Tables } from '@/types/database.types'
+import type { Database, Tables } from '@/types/database.types'
 
 type MembersProfile = Tables<'tbl_members_profile'>
 type TblUser = Tables<'tbl_users'>
@@ -63,6 +64,124 @@ export const useAdminStore = defineStore('admin', () => {
         members.value.filter((m) => m.status === 'pending'),
     )
 
+    // Admin creates a member account directly. The auth user is created on an
+    // isolated Supabase client so the admin's own session is never replaced by the
+    // new user's. The app rows are inserted as the new user (RLS pins them to a
+    // pending member), then the admin's privileged session auto-approves them —
+    // an admin adding someone is an implicit vouch.
+    async function addMember(payload: {
+        email: string
+        password: string
+        firstName: string
+        middleName?: string
+        lastName: string
+        satelliteChurchId: number
+        satelliteChurchName?: string
+    }) {
+        loading.value = true
+        error.value = null
+
+        try {
+            const tempClient = createClient<Database>(
+                import.meta.env.VITE_SUPABASE_URL as string,
+                import.meta.env.VITE_SUPABASE_ANON_KEY as string,
+                { auth: { persistSession: false, autoRefreshToken: false } },
+            )
+
+            const { data: authData, error: signUpErr } = await tempClient.auth.signUp({
+                email: payload.email,
+                password: payload.password,
+                options: {
+                    data: {
+                        first_name: payload.firstName,
+                        last_name: payload.lastName,
+                        middle_name: payload.middleName ?? null,
+                        satellite_church_id: payload.satelliteChurchId,
+                        satellite_church_name: payload.satelliteChurchName ?? null,
+                    },
+                },
+            })
+
+            if (signUpErr) throw signUpErr
+            if (!authData.user) throw new Error('Could not create the member account.')
+
+            const identities = (authData.user as any).identities
+            if (Array.isArray(identities) && identities.length === 0) {
+                throw new Error('An account with this email already exists.')
+            }
+
+            // Ensure the temp client has a session to insert under. With email
+            // confirmation disabled signUp returns one; otherwise sign in (the
+            // account is auto-confirmed by the DB trigger).
+            let memberSession = authData.session
+            if (!memberSession) {
+                const { data: signInData } = await tempClient.auth.signInWithPassword({
+                    email: payload.email,
+                    password: payload.password,
+                })
+                memberSession = signInData.session
+            }
+            if (!memberSession) {
+                throw new Error('Could not establish a session for the new member.')
+            }
+
+            const userId = authData.user.id
+
+            const { error: uErr } = await tempClient.from('tbl_users').upsert(
+                {
+                    id: userId,
+                    email: payload.email,
+                    first_name: payload.firstName,
+                    middle_name: payload.middleName ?? null,
+                    last_name: payload.lastName,
+                    role_id: 6,
+                    role_type: 'member',
+                    is_active: 'P',
+                },
+                { onConflict: 'id', ignoreDuplicates: true },
+            )
+            if (uErr) throw uErr
+
+            const { error: pErr } = await tempClient.from('tbl_members_profile').upsert(
+                {
+                    user_id: userId,
+                    email: payload.email,
+                    first_name: payload.firstName,
+                    middle_name: payload.middleName ?? null,
+                    last_name: payload.lastName,
+                    satellite_church_id: payload.satelliteChurchId,
+                    satellite_church_name: payload.satelliteChurchName ?? null,
+                    status: 'pending',
+                },
+                { onConflict: 'user_id', ignoreDuplicates: true },
+            )
+            if (pErr) throw pErr
+
+            await tempClient.auth.signOut()
+
+            // Auto-approve using the admin's privileged session.
+            const auth = useAuthStore()
+            await supabase
+                .from('tbl_members_profile')
+                .update({
+                    status: 'approved',
+                    qr_token: crypto.randomUUID(),
+                    approved_by: auth.session?.user.id ?? null,
+                    approved_at: new Date().toISOString(),
+                })
+                .eq('user_id', userId)
+            await supabase.from('tbl_users').update({ is_active: 'Y' }).eq('id', userId)
+
+            await fetchMembers()
+            return { success: true }
+        } catch (err: any) {
+            error.value = err.message ?? 'Failed to add member'
+            return { success: false, error: error.value }
+        } finally {
+            loading.value = false
+        }
+    }
+
     async function approveMember(profile: MembersProfile) {
         const auth = useAuthStore()
         const qrToken = crypto.randomUUID()
@@ -99,24 +218,10 @@ export const useAdminStore = defineStore('admin', () => {
         return { success: true }
     }
 
-    async function rejectMember(profile: MembersProfile, reason: string) {
-        const { error: err } = await supabase
-            .from('tbl_members_profile')
-            .update({
-                status: 'rejected',
-                rejected_reason: reason,
-            })
-            .eq('id', profile.id)
-
-        if (err) return { success: false, error: err.message }
-
-        await supabase
-            .from('tbl_users')
-            .update({ is_active: 'N' })
-            .eq('id', profile.user_id)
-
-        await fetchMembers()
-        return { success: true }
+    // Rejecting a member removes the account entirely (auth user → tbl_users →
+    // tbl_members_profile), same as Delete. There is no lingering 'rejected' row.
+    async function rejectMember(profile: MembersProfile, _reason?: string) {
+        return deleteMember(profile)
     }
 
     async function fetchMemberById(userId: string) {
@@ -144,12 +249,12 @@ export const useAdminStore = defineStore('admin', () => {
         return data ?? []
     }
 
+    // Deletes the whole account. The admin_delete_member RPC removes the auth user,
+    // which cascades to tbl_users and tbl_members_profile (and user-owned content).
     async function deleteMember(profile: MembersProfile) {
-        // Delete profile record (cascade or manual cleanup)
-        const { error: err } = await supabase
-            .from('tbl_members_profile')
-            .delete()
-            .eq('id', profile.id)
+        const { error: err } = await (supabase.rpc as any)('admin_delete_member', {
+            target_user_id: profile.user_id,
+        })
 
         if (err) return { success: false, error: err.message }
         await fetchMembers()
@@ -165,6 +270,7 @@ export const useAdminStore = defineStore('admin', () => {
         pendingMembers,
         fetchMembers,
         fetchUsers,
+        addMember,
         approveMember,
         rejectMember,
         deleteMember,
