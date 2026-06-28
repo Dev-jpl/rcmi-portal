@@ -102,6 +102,12 @@ export const memberRoutes: RouteRecordRaw[] = [
                         props: true
                     }
                 ]
+            },
+            {
+                path: 'lost-found',
+                name: 'member-lost-found',
+                component: () => import('@/pages/member/LostFoundPage.vue'),
+                meta: { requiresApproved: true }
             }
         ]
     }

@@ -33,11 +33,22 @@ const addForm = ref({
     satelliteChurchId: null as number | null,
 })
 
+const showEditModal = ref(false)
+const editLoading = ref(false)
+const editError = ref('')
+const editTarget = ref<MembersProfile | null>(null)
+const editCurrentRole = ref('member')
+const editForm = ref({ firstName: '', middleName: '', lastName: '', isAdmin: false })
+
 const churches = ref<{ id: number; church_name: string }[]>([])
 
 onMounted(async () => {
-    await Promise.all([admin.fetchMembers(), fetchChurches(), fetchLastAttendance()])
+    await Promise.all([admin.fetchMembers(), admin.fetchUsers(), fetchChurches(), fetchLastAttendance()])
 })
+
+function isMemberAdmin(userId: string) {
+    return ['admin', 'super_admin'].includes(admin.roleByUserId.get(userId) ?? '')
+}
 
 async function fetchChurches() {
     const { data } = await supabase
@@ -140,6 +151,55 @@ function exportToExcel() {
 
 function viewMember(m: MembersProfile) {
     router.push({ name: 'admin-member-detail', params: { id: m.user_id } })
+}
+
+function openEdit(member: MembersProfile) {
+    editTarget.value = member
+    editCurrentRole.value = admin.roleByUserId.get(member.user_id) ?? 'member'
+    editForm.value = {
+        firstName: member.first_name ?? '',
+        middleName: member.middle_name ?? '',
+        lastName: member.last_name ?? '',
+        isAdmin: ['admin', 'super_admin'].includes(editCurrentRole.value),
+    }
+    editError.value = ''
+    showEditModal.value = true
+}
+
+async function handleEdit() {
+    if (!editTarget.value) return
+    const t = editTarget.value
+    if (!editForm.value.firstName.trim() || !editForm.value.lastName.trim()) {
+        editError.value = 'First and last name are required.'
+        return
+    }
+
+    editLoading.value = true
+    editError.value = ''
+
+    const infoRes = await admin.updateMemberInfo(t.user_id, {
+        first_name: editForm.value.firstName.trim(),
+        middle_name: editForm.value.middleName.trim() || null,
+        last_name: editForm.value.lastName.trim(),
+    })
+
+    let roleRes: { success: boolean; error?: string } = { success: true }
+    // Only super_admins can change roles, and never demote an existing super_admin here.
+    if (infoRes.success && admin.isSuperAdmin && editCurrentRole.value !== 'super_admin') {
+        const currentlyAdmin = editCurrentRole.value === 'admin'
+        if (editForm.value.isAdmin !== currentlyAdmin) {
+            roleRes = await admin.setMemberRole(t.user_id, editForm.value.isAdmin ? 'admin' : 'member')
+        }
+    }
+
+    editLoading.value = false
+
+    if (infoRes.success && roleRes.success) {
+        message.value = { type: 'success', text: `${editForm.value.firstName} ${editForm.value.lastName} updated.` }
+        showEditModal.value = false
+    } else {
+        editError.value = infoRes.error ?? roleRes.error ?? 'Failed to update member.'
+    }
 }
 
 function openDelete(member: MembersProfile) {
@@ -315,7 +375,15 @@ function formatDate(d: string | null) {
                                         <span v-else>{{ (m.first_name?.[0] ?? '') + (m.last_name?.[0] ?? '') }}</span>
                                     </div>
                                     <div class="min-w-0">
-                                        <span class="font-medium text-gray-900">{{ m.first_name }} {{ m.last_name }}</span>
+                                        <span class="font-medium text-gray-900">
+                                            {{ m.first_name }} {{ m.last_name }}
+                                            <span
+                                                v-if="isMemberAdmin(m.user_id)"
+                                                class="ml-1 inline-flex px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-navy/10 text-navy align-middle"
+                                            >
+                                                Admin
+                                            </span>
+                                        </span>
                                         <p class="text-xs text-gray-400 md:hidden truncate">{{ m.email }}</p>
                                     </div>
                                 </div>
@@ -364,9 +432,9 @@ function formatDate(d: string | null) {
                                 <template v-else>
                                     <button
                                         class="text-navy hover:text-navy-600 text-sm font-medium mr-3"
-                                        @click="viewMember(m)"
+                                        @click="openEdit(m)"
                                     >
-                                        View
+                                        Edit
                                     </button>
                                     <button
                                         class="text-red-400 hover:text-red-600 text-sm font-medium"
@@ -381,6 +449,107 @@ function formatDate(d: string | null) {
                 </table>
             </div>
         </div>
+
+        <!-- Edit Member Modal -->
+        <Teleport to="body">
+            <div
+                v-if="showEditModal"
+                class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+                @click.self="showEditModal = false"
+            >
+                <div class="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+                    <h3 class="text-lg font-heading font-bold text-navy mb-4">Edit Member</h3>
+
+                    <form class="space-y-3" @submit.prevent="handleEdit">
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 mb-1">First Name</label>
+                                <input
+                                    v-model="editForm.firstName"
+                                    type="text"
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-navy/30 focus:border-navy"
+                                />
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 mb-1">Last Name</label>
+                                <input
+                                    v-model="editForm.lastName"
+                                    type="text"
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-navy/30 focus:border-navy"
+                                />
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 mb-1">Middle Name</label>
+                            <input
+                                v-model="editForm.middleName"
+                                type="text"
+                                class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-navy/30 focus:border-navy"
+                            />
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 mb-1">Email</label>
+                            <input
+                                :value="editTarget?.email"
+                                type="email"
+                                disabled
+                                class="w-full px-3 py-2 border border-gray-200 bg-gray-100 text-gray-500 rounded-lg text-sm"
+                            />
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 mb-1">Church</label>
+                            <input
+                                :value="editTarget?.satellite_church_name ?? '—'"
+                                type="text"
+                                disabled
+                                class="w-full px-3 py-2 border border-gray-200 bg-gray-100 text-gray-500 rounded-lg text-sm"
+                            />
+                        </div>
+
+                        <!-- Admin access (super_admin only) -->
+                        <label
+                            v-if="admin.isSuperAdmin"
+                            class="flex items-start gap-2.5 cursor-pointer rounded-lg border border-gray-200 px-3 py-2.5"
+                            :class="{ 'opacity-60 cursor-not-allowed': editCurrentRole === 'super_admin' }"
+                        >
+                            <input
+                                v-model="editForm.isAdmin"
+                                type="checkbox"
+                                :disabled="editCurrentRole === 'super_admin'"
+                                class="w-4 h-4 mt-0.5 rounded border-gray-300 text-navy focus:ring-navy"
+                            />
+                            <span class="text-sm text-gray-700">
+                                <span class="font-medium">Grant admin access</span>
+                                <span class="block text-xs text-gray-400 mt-0.5">
+                                    {{ editCurrentRole === 'super_admin'
+                                        ? 'This member is a super admin and cannot be changed here.'
+                                        : 'Lets this member manage members, approvals and events for their church.' }}
+                                </span>
+                            </span>
+                        </label>
+
+                        <p v-if="editError" class="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{{ editError }}</p>
+
+                        <div class="flex justify-end gap-3 pt-1">
+                            <button
+                                type="button"
+                                class="px-4 py-2 border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50"
+                                @click="showEditModal = false"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="submit"
+                                :disabled="editLoading"
+                                class="px-4 py-2 bg-navy text-white text-sm font-semibold rounded-lg hover:bg-navy-700 disabled:opacity-50"
+                            >
+                                {{ editLoading ? 'Saving...' : 'Save Changes' }}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </Teleport>
 
         <!-- Add Member Modal -->
         <Teleport to="body">

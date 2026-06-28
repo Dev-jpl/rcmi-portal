@@ -46,6 +46,12 @@ export const adminRoutes: RouteRecordRaw[] = [
                 ]
             },
             {
+                path: 'lost-found',
+                name: 'admin-lost-found',
+                component: () => import('@/pages/admin/LostFoundPage.vue'),
+                meta: { roles: ['super_admin', 'admin'] }
+            },
+            {
                 path: 'events',
                 meta: { roles: ['super_admin', 'admin'] },
                 children: [

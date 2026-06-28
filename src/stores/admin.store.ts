@@ -64,6 +64,46 @@ export const useAdminStore = defineStore('admin', () => {
         members.value.filter((m) => m.status === 'pending'),
     )
 
+    // user_id → role_type, derived from the loaded tbl_users rows. Lets the members
+    // list show who is an admin and pre-fill the edit form's admin toggle.
+    const roleByUserId = computed(() => {
+        const map = new Map<string, string>()
+        for (const u of users.value) {
+            if (u.role_type) map.set(u.id, u.role_type)
+        }
+        return map
+    })
+
+    // Update a member's profile info. Admins may edit members in their own church
+    // (RLS: "profile: admin update status"); the protect trigger lets admins through.
+    async function updateMemberInfo(
+        userId: string,
+        updates: { first_name?: string | null; middle_name?: string | null; last_name?: string | null },
+    ) {
+        const { error: err } = await supabase
+            .from('tbl_members_profile')
+            .update(updates)
+            .eq('user_id', userId)
+
+        if (err) return { success: false, error: err.message }
+        await fetchMembers()
+        return { success: true }
+    }
+
+    // Grant or revoke church-admin access. Only super_admins can update tbl_users
+    // (enforced by RLS), so this is gated to super_admin in the UI. role_id 2 = admin,
+    // 6 = member (ref_roles seed order).
+    async function setMemberRole(userId: string, role: 'admin' | 'member') {
+        const { error: err } = await supabase
+            .from('tbl_users')
+            .update({ role_type: role, role_id: role === 'admin' ? 2 : 6 })
+            .eq('id', userId)
+
+        if (err) return { success: false, error: err.message }
+        await fetchUsers()
+        return { success: true }
+    }
+
     // Admin creates a member account directly. The auth user is created on an
     // isolated Supabase client so the admin's own session is never replaced by the
     // new user's. The app rows are inserted as the new user (RLS pins them to a
@@ -268,9 +308,12 @@ export const useAdminStore = defineStore('admin', () => {
         error,
         isSuperAdmin,
         pendingMembers,
+        roleByUserId,
         fetchMembers,
         fetchUsers,
         addMember,
+        updateMemberInfo,
+        setMemberRole,
         approveMember,
         rejectMember,
         deleteMember,
