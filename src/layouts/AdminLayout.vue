@@ -86,6 +86,7 @@ const icons = {
   qrscan: `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 013.75 9.375v-4.5zM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5zM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5z"/>`,
   scripture: `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"/>`,
   lostfound: `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/>`,
+  newcomers: `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M18 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zM3 19.235v-.11a6.375 6.375 0 0112.75 0v.109A12.318 12.318 0 019.374 21c-2.331 0-4.512-.645-6.374-1.766z"/>`,
   ...ministryIcons,
 }
 
@@ -113,6 +114,7 @@ const navGroups = computed<NavGroup[]>(() => {
       title: 'People & Events',
       items: [
         { label: 'Members', to: { name: 'admin-members' }, iconKey: 'members', badge: true },
+        { label: 'Newcomers', to: { name: 'admin-newcomers' }, iconKey: 'newcomers' },
         { label: 'Lost & Found', to: { name: 'admin-lost-found' }, iconKey: 'lostfound' },
         { label: 'Events', to: { name: 'admin-events' }, iconKey: 'events' },
         { label: 'Attendance', to: { name: 'admin-attendance' }, iconKey: 'attendance' },
@@ -187,6 +189,7 @@ const navGroups = computed<NavGroup[]>(() => {
     groups.push({
       title: 'Tools',
       items: [
+        { label: 'Newcomers', to: { name: 'admin-newcomers' }, iconKey: 'newcomers' },
         { label: 'Bible Studies', to: { name: 'admin-bible-studies' }, iconKey: 'scripture' },
         { label: 'QR Scan', to: { name: 'admin-qr-scan' }, iconKey: 'qrscan' },
       ],

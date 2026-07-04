@@ -15,6 +15,14 @@ const router = createRouter({
       redirect: '/login'
     },
 
+    // Public newcomer welcome form (no auth — reached via QR code)
+    {
+      path: '/welcome',
+      name: 'welcome',
+      component: () => import('@/pages/public/WelcomePage.vue'),
+      meta: { layout: 'auth' }
+    },
+
     // Auth pages (login, register, pending)
     ...authRoutes,
 

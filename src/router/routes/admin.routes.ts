@@ -52,6 +52,12 @@ export const adminRoutes: RouteRecordRaw[] = [
                 meta: { roles: ['super_admin', 'admin'] }
             },
             {
+                path: 'newcomers',
+                name: 'admin-newcomers',
+                component: () => import('@/pages/admin/NewcomersPage.vue'),
+                meta: { roles: ['super_admin', 'admin', 'pastoral', 'network_leader', 'lpath_leader'] }
+            },
+            {
                 path: 'events',
                 meta: { roles: ['super_admin', 'admin'] },
                 children: [

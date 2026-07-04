@@ -1176,6 +1176,123 @@ export type Database = {
           },
         ]
       }
+      tbl_newcomer_access_codes: {
+        Row: {
+          church_id: number
+          code: string
+          created_at: string
+          created_by: string | null
+          id: string
+          is_active: boolean
+          valid_from: string
+          valid_until: string
+        }
+        Insert: {
+          church_id: number
+          code?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          valid_from: string
+          valid_until: string
+        }
+        Update: {
+          church_id?: number
+          code?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          valid_from?: string
+          valid_until?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tbl_newcomer_access_codes_church_id_fkey"
+            columns: ["church_id"]
+            isOneToOne: false
+            referencedRelation: "lib_satellite_churches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tbl_newcomer_access_codes_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "tbl_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tbl_newcomers: {
+        Row: {
+          access_code_id: string | null
+          church_id: number
+          contact_no: string
+          created_at: string
+          deleted_at: string | null
+          email: string
+          first_name: string
+          id: string
+          is_deleted: boolean
+          last_name: string
+          notes: string | null
+          source: string
+          status: string
+          submitted_at: string
+          submitter_ip: string | null
+        }
+        Insert: {
+          access_code_id?: string | null
+          church_id: number
+          contact_no: string
+          created_at?: string
+          deleted_at?: string | null
+          email: string
+          first_name: string
+          id?: string
+          is_deleted?: boolean
+          last_name: string
+          notes?: string | null
+          source?: string
+          status?: string
+          submitted_at?: string
+          submitter_ip?: string | null
+        }
+        Update: {
+          access_code_id?: string | null
+          church_id?: number
+          contact_no?: string
+          created_at?: string
+          deleted_at?: string | null
+          email?: string
+          first_name?: string
+          id?: string
+          is_deleted?: boolean
+          last_name?: string
+          notes?: string | null
+          source?: string
+          status?: string
+          submitted_at?: string
+          submitter_ip?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tbl_newcomers_access_code_id_fkey"
+            columns: ["access_code_id"]
+            isOneToOne: false
+            referencedRelation: "tbl_newcomer_access_codes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tbl_newcomers_church_id_fkey"
+            columns: ["church_id"]
+            isOneToOne: false
+            referencedRelation: "lib_satellite_churches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       v_attendance_summary: {
@@ -1537,7 +1654,21 @@ export type Database = {
       }
     }
     Functions: {
-      [_ in never]: never
+      get_welcome_form: {
+        Args: { p_code: string }
+        Returns: Json
+      }
+      submit_newcomer: {
+        Args: {
+          p_code: string
+          p_first_name: string
+          p_last_name: string
+          p_email: string
+          p_contact_no: string
+          p_honeypot?: string
+        }
+        Returns: Json
+      }
     }
     Enums: {
       [_ in never]: never
