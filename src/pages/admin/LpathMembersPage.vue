@@ -254,6 +254,13 @@ const selectedNetworkName = computed(() => {
     return n ? displayName(n.user) : null
 })
 
+const selectedPastorName = computed(() => {
+    const n = networkLeaders.value.find(n => n.id === form.value.network_leader_id)
+    if (n?.pastor_name) return n.pastor_name
+    const l = lpathLeaders.value.find(l => l.user_id === form.value.lpath_leader_id)
+    return l?.pastor_name ?? null
+})
+
 async function handleSave() {
     if (!form.value.user_id) return
     saving.value = true
@@ -261,6 +268,7 @@ async function handleSave() {
 
     const selectedChurch = churches.value.find(c => c.id === form.value.church_id)
     const selectedLpathLeader = lpathLeaders.value.find(l => l.user_id === form.value.lpath_leader_id)
+    const selectedNetworkLeader = networkLeaders.value.find(n => n.id === form.value.network_leader_id)
 
     const payload = {
         user_id: form.value.user_id,
@@ -268,8 +276,8 @@ async function handleSave() {
         lpath_leader_name: selectedLpathName.value,
         network_leader_id: form.value.network_leader_id,
         network_leader_name: selectedNetworkName.value,
-        pastor_id: selectedLpathLeader?.pastor_id ?? null,
-        pastor_name: selectedLpathLeader?.pastor_name ?? null,
+        pastor_id: selectedNetworkLeader?.pastor_id ?? selectedLpathLeader?.pastor_id ?? null,
+        pastor_name: selectedPastorName.value,
         church_id: form.value.church_id,
         church_name: selectedChurch?.church_name ?? null,
         date_started: form.value.date_started || null,
@@ -499,6 +507,16 @@ function churchName(id: number | null) {
                                     No network leaders found.
                                 </div>
                             </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Pastor</label>
+                            <input
+                                :value="selectedPastorName ?? ''"
+                                type="text"
+                                readonly
+                                placeholder="Auto-filled from leader"
+                                class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-gray-50 text-gray-600 focus:outline-none cursor-not-allowed"
+                            />
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Church</label>
