@@ -525,6 +525,7 @@ export type Database = {
       tbl_lpath_members: {
         Row: {
           church_id: number | null
+          church_name: string | null
           created_at: string | null
           date_started: string | null
           id: number
@@ -533,11 +534,14 @@ export type Database = {
           lpath_leader_name: string | null
           network_leader_id: number | null
           network_leader_name: string | null
+          pastor_id: string | null
+          pastor_name: string | null
           updated_at: string | null
           user_id: string
         }
         Insert: {
           church_id?: number | null
+          church_name?: string | null
           created_at?: string | null
           date_started?: string | null
           id?: number
@@ -546,11 +550,14 @@ export type Database = {
           lpath_leader_name?: string | null
           network_leader_id?: number | null
           network_leader_name?: string | null
+          pastor_id?: string | null
+          pastor_name?: string | null
           updated_at?: string | null
           user_id: string
         }
         Update: {
           church_id?: number | null
+          church_name?: string | null
           created_at?: string | null
           date_started?: string | null
           id?: number
@@ -559,6 +566,8 @@ export type Database = {
           lpath_leader_name?: string | null
           network_leader_id?: number | null
           network_leader_name?: string | null
+          pastor_id?: string | null
+          pastor_name?: string | null
           updated_at?: string | null
           user_id?: string
         }

@@ -13,6 +13,11 @@ const logs = ref<AttendanceLog[]>([])
 const loading = ref(true)
 const churches = ref<{ id: number; church_name: string }[]>([])
 
+// Each member's leadership chain (Pastor → Network Leader → L-Path Leader),
+// keyed by user_id, sourced from tbl_lpath_members.
+interface Hierarchy { pastor: string | null; network: string | null; lpath: string | null }
+const hierarchyMap = ref<Record<string, Hierarchy>>({})
+
 // Filters
 const dateFrom = ref('')
 const dateTo = ref('')
@@ -26,9 +31,24 @@ onMounted(async () => {
     dateFrom.value = thirtyAgo.toISOString().split('T')[0]
     dateTo.value = now.toISOString().split('T')[0]
 
-    await Promise.all([fetchLogs(), fetchChurches(), admin.fetchMembers()])
+    await Promise.all([fetchLogs(), fetchChurches(), fetchHierarchy(), admin.fetchMembers()])
     loading.value = false
 })
+
+async function fetchHierarchy() {
+    const { data } = await supabase
+        .from('tbl_lpath_members')
+        .select('user_id, pastor_name, network_leader_name, lpath_leader_name')
+    const map: Record<string, Hierarchy> = {}
+    for (const r of data ?? []) {
+        map[r.user_id] = {
+            pastor: r.pastor_name,
+            network: r.network_leader_name,
+            lpath: r.lpath_leader_name,
+        }
+    }
+    hierarchyMap.value = map
+}
 
 async function fetchChurches() {
     const { data } = await supabase
@@ -91,10 +111,17 @@ const summary = computed(() => {
     return { total, uniqueMembers, uniqueEvents, byMethod, byLocation }
 })
 
+function getPastor(userId: string | null) { return (userId && hierarchyMap.value[userId]?.pastor) || '—' }
+function getNetworkLeader(userId: string | null) { return (userId && hierarchyMap.value[userId]?.network) || '—' }
+function getLpathLeader(userId: string | null) { return (userId && hierarchyMap.value[userId]?.lpath) || '—' }
+
 function exportToExcel() {
     const rows = filtered.value.map((l) => ({
         Date: l.log_date ?? '',
         Member: getMemberName(l.user_id),
+        Pastor: getPastor(l.user_id),
+        'Network Leader': getNetworkLeader(l.user_id),
+        'L-Path Leader': getLpathLeader(l.user_id),
         Event: l.event_title ?? '',
         'Logged By': l.logged_by_name ?? '',
         Location: l.logged_location_name ?? '',
@@ -240,6 +267,9 @@ function formatDate(d: string | null) {
                         <tr class="bg-gray-50 text-left text-gray-500 font-medium">
                             <th class="px-4 py-3">Date</th>
                             <th class="px-4 py-3">Member</th>
+                            <th class="px-4 py-3 hidden lg:table-cell">Pastor</th>
+                            <th class="px-4 py-3 hidden lg:table-cell">Network Leader</th>
+                            <th class="px-4 py-3 hidden lg:table-cell">L-Path Leader</th>
                             <th class="px-4 py-3">Event</th>
                             <th class="px-4 py-3 hidden md:table-cell">Logged By</th>
                             <th class="px-4 py-3 hidden md:table-cell">Location</th>
@@ -251,6 +281,9 @@ function formatDate(d: string | null) {
                         <tr v-for="log in filtered.slice(0, 100)" :key="log.id" class="hover:bg-gray-50/50">
                             <td class="px-4 py-3 text-gray-900">{{ formatDate(log.log_date) }}</td>
                             <td class="px-4 py-3 font-medium text-gray-900">{{ getMemberName(log.user_id) }}</td>
+                            <td class="px-4 py-3 text-gray-500 hidden lg:table-cell">{{ getPastor(log.user_id) }}</td>
+                            <td class="px-4 py-3 text-gray-500 hidden lg:table-cell">{{ getNetworkLeader(log.user_id) }}</td>
+                            <td class="px-4 py-3 text-gray-500 hidden lg:table-cell">{{ getLpathLeader(log.user_id) }}</td>
                             <td class="px-4 py-3 font-medium text-gray-900">{{ log.event_title ?? '—' }}</td>
                             <td class="px-4 py-3 text-gray-500 hidden md:table-cell">{{ log.logged_by_name ?? '—' }}</td>
                             <td class="px-4 py-3 text-gray-500 hidden md:table-cell">{{ log.logged_location_name ?? '—' }}</td>
