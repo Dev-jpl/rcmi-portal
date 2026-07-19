@@ -5,7 +5,15 @@ import { useAdminStore } from '@/stores/admin.store'
 import * as XLSX from 'xlsx'
 import type { Tables } from '@/types/database.types'
 
-type AttendanceLog = Tables<'tbl_attendance_logs'>
+// database.types.ts lags the live schema — log_type/program_id predate it and
+// the bible study columns arrive in migration 018. Regenerate to drop this.
+type AttendanceLog = Tables<'tbl_attendance_logs'> & {
+    log_type: string | null
+    program_id: number | null
+    bible_study_id: number | null
+    bs_pastor_id: string | null
+    bs_pastor_name: string | null
+}
 
 const admin = useAdminStore()
 
@@ -23,6 +31,7 @@ const dateFrom = ref('')
 const dateTo = ref('')
 const churchFilter = ref<number | null>(null)
 const eventTypeFilter = ref('')
+const logTypeFilter = ref('')
 
 onMounted(async () => {
     // Default date range: last 30 days
@@ -88,7 +97,36 @@ const filtered = computed(() => {
     if (eventTypeFilter.value) {
         list = list.filter((l) => l.event_title?.toLowerCase().includes(eventTypeFilter.value.toLowerCase()))
     }
+    if (logTypeFilter.value) {
+        // Rows written before log_type existed default to 'event'.
+        list = list.filter((l) => (l.log_type ?? 'event') === logTypeFilter.value)
+    }
     return list
+})
+
+const LOG_TYPE_LABELS: Record<string, string> = {
+    event: 'Event',
+    program: 'Program',
+    bible_study: 'Bible Study',
+}
+
+function getLogTypeLabel(t: string | null) {
+    return LOG_TYPE_LABELS[t ?? 'event'] ?? (t ?? '—')
+}
+
+// Bible-study-only rollups, so attendance can be read per study and per the
+// pastor leading it.
+const bibleStudySummary = computed(() => {
+    const rows = filtered.value.filter((l) => l.log_type === 'bible_study')
+    const byStudy: Record<string, number> = {}
+    const byPastor: Record<string, number> = {}
+    for (const l of rows) {
+        const study = l.event_title ?? 'Unknown'
+        byStudy[study] = (byStudy[study] ?? 0) + 1
+        const pastor = l.bs_pastor_name ?? 'Unassigned'
+        byPastor[pastor] = (byPastor[pastor] ?? 0) + 1
+    }
+    return { total: rows.length, byStudy, byPastor }
 })
 
 // Summary stats
@@ -116,13 +154,17 @@ function getNetworkLeader(userId: string | null) { return (userId && hierarchyMa
 function getLpathLeader(userId: string | null) { return (userId && hierarchyMap.value[userId]?.lpath) || '—' }
 
 function exportToExcel() {
+    // Deliberately excludes sensitive member fields (email, contact number,
+    // address) — this export is shared beyond the admin team.
     const rows = filtered.value.map((l) => ({
         Date: l.log_date ?? '',
         Member: getMemberName(l.user_id),
         Pastor: getPastor(l.user_id),
         'Network Leader': getNetworkLeader(l.user_id),
         'L-Path Leader': getLpathLeader(l.user_id),
+        Type: getLogTypeLabel(l.log_type),
         Event: l.event_title ?? '',
+        'Bible Study Pastor': l.bs_pastor_name ?? '',
         'Logged By': l.logged_by_name ?? '',
         Location: l.logged_location_name ?? '',
         Method: l.input_method ?? '',
@@ -193,6 +235,18 @@ function formatDate(d: string | null) {
                     </select>
                 </div>
                 <div>
+                    <label class="block text-xs text-gray-500 mb-1">Log Type</label>
+                    <select
+                        v-model="logTypeFilter"
+                        class="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-navy/30"
+                    >
+                        <option value="">All</option>
+                        <option value="event">Event</option>
+                        <option value="program">Program</option>
+                        <option value="bible_study">Bible Study</option>
+                    </select>
+                </div>
+                <div>
                     <label class="block text-xs text-gray-500 mb-1">Event Type</label>
                     <input
                         v-model="eventTypeFilter"
@@ -238,6 +292,42 @@ function formatDate(d: string | null) {
             </div>
         </div>
 
+        <!-- Bible study breakdown -->
+        <div v-if="bibleStudySummary.total" class="bg-white rounded-lg border border-gray-200 p-5 mb-6">
+            <h2 class="font-heading font-semibold text-navy mb-3">
+                Bible Study Attendance
+                <span class="text-sm font-normal text-gray-400">({{ bibleStudySummary.total }} logs)</span>
+            </h2>
+            <div class="grid md:grid-cols-2 gap-6">
+                <div>
+                    <p class="text-xs text-gray-500 uppercase tracking-wider mb-2">By Bible Study</p>
+                    <div class="space-y-2">
+                        <div
+                            v-for="(count, study) in bibleStudySummary.byStudy"
+                            :key="study"
+                            class="flex justify-between items-center p-3 bg-gray-50 rounded-lg"
+                        >
+                            <span class="text-sm text-gray-700 truncate">{{ study }}</span>
+                            <span class="text-lg font-heading font-bold text-navy ml-2">{{ count }}</span>
+                        </div>
+                    </div>
+                </div>
+                <div>
+                    <p class="text-xs text-gray-500 uppercase tracking-wider mb-2">By Pastor</p>
+                    <div class="space-y-2">
+                        <div
+                            v-for="(count, pastor) in bibleStudySummary.byPastor"
+                            :key="pastor"
+                            class="flex justify-between items-center p-3 bg-gray-50 rounded-lg"
+                        >
+                            <span class="text-sm text-gray-700 truncate">{{ pastor }}</span>
+                            <span class="text-lg font-heading font-bold text-navy ml-2">{{ count }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- By location breakdown -->
         <div v-if="Object.keys(summary.byLocation).length > 1" class="bg-white rounded-lg border border-gray-200 p-5 mb-6">
             <h2 class="font-heading font-semibold text-navy mb-3">By Location</h2>
@@ -270,7 +360,9 @@ function formatDate(d: string | null) {
                             <th class="px-4 py-3 hidden lg:table-cell">Pastor</th>
                             <th class="px-4 py-3 hidden lg:table-cell">Network Leader</th>
                             <th class="px-4 py-3 hidden lg:table-cell">L-Path Leader</th>
+                            <th class="px-4 py-3">Type</th>
                             <th class="px-4 py-3">Event</th>
+                            <th class="px-4 py-3 hidden lg:table-cell">BS Pastor</th>
                             <th class="px-4 py-3 hidden md:table-cell">Logged By</th>
                             <th class="px-4 py-3 hidden md:table-cell">Location</th>
                             <th class="px-4 py-3">Method</th>
@@ -284,7 +376,20 @@ function formatDate(d: string | null) {
                             <td class="px-4 py-3 text-gray-500 hidden lg:table-cell">{{ getPastor(log.user_id) }}</td>
                             <td class="px-4 py-3 text-gray-500 hidden lg:table-cell">{{ getNetworkLeader(log.user_id) }}</td>
                             <td class="px-4 py-3 text-gray-500 hidden lg:table-cell">{{ getLpathLeader(log.user_id) }}</td>
+                            <td class="px-4 py-3">
+                                <span
+                                    class="text-xs px-2 py-0.5 rounded-full"
+                                    :class="log.log_type === 'bible_study'
+                                        ? 'bg-amber-100 text-amber-700'
+                                        : log.log_type === 'program'
+                                            ? 'bg-blue-100 text-blue-700'
+                                            : 'bg-gray-100 text-gray-600'"
+                                >
+                                    {{ getLogTypeLabel(log.log_type) }}
+                                </span>
+                            </td>
                             <td class="px-4 py-3 font-medium text-gray-900">{{ log.event_title ?? '—' }}</td>
+                            <td class="px-4 py-3 text-gray-500 hidden lg:table-cell">{{ log.bs_pastor_name ?? '—' }}</td>
                             <td class="px-4 py-3 text-gray-500 hidden md:table-cell">{{ log.logged_by_name ?? '—' }}</td>
                             <td class="px-4 py-3 text-gray-500 hidden md:table-cell">{{ log.logged_location_name ?? '—' }}</td>
                             <td class="px-4 py-3">

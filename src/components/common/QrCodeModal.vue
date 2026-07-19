@@ -20,13 +20,20 @@ const scanSuccess = ref<{ name: string; title: string } | null>(null)
 const scanning = ref(false)
 
 // Scan config
-const scanLogType = ref<'event' | 'program'>('event')
+const scanLogType = ref<'event' | 'program' | 'bible_study'>('event')
 const scanEventId = ref<number | null>(null)
 const scanProgramId = ref<number | null>(null)
+const scanPastorId = ref<string | null>(null)
+const scanBibleStudyId = ref<number | null>(null)
 
 // Data
 const defaultEvents = ref<{ id: number; event_title: string }[]>([])
 const programs = ref<{ id: number; type: string }[]>([])
+const pastors = ref<{ user_id: string; name: string }[]>([])
+const bibleStudies = ref<{ id: number; title: string }[]>([])
+// bible_study_id -> handler user_ids, used to narrow studies down to the
+// selected pastor's own.
+const bibleStudyHandlers = ref<Record<number, string[]>>({})
 
 const allEventOptions = computed(() => {
     const real = eventStore.events
@@ -35,6 +42,16 @@ const allEventOptions = computed(() => {
     const defaults = defaultEvents.value
         .map(d => ({ id: -d.id, label: `${d.event_title} (Default)` }))
     return [...real, ...defaults]
+})
+
+// Studies led by the selected pastor. A pastor with no handler rows falls back
+// to the full active list rather than showing an empty dropdown.
+const bibleStudyOptions = computed(() => {
+    if (!scanPastorId.value) return []
+    const own = bibleStudies.value.filter(s =>
+        (bibleStudyHandlers.value[s.id] ?? []).includes(scanPastorId.value!)
+    )
+    return own.length ? own : bibleStudies.value
 })
 
 // Always allow scanning — event QR codes work without pre-selection
@@ -49,8 +66,51 @@ async function loadData() {
         eventStore.fetchEvents(),
         fetchDefaultEvents(),
         fetchPrograms(),
+        fetchBibleStudies(),
     ])
     dataLoaded = true
+}
+
+async function fetchBibleStudies() {
+    const [{ data: studies }, { data: handlers }, { data: pastoral }] = await Promise.all([
+        supabase
+            .from('tbl_bible_studies')
+            .select('id, title')
+            .eq('is_active', true)
+            .order('title'),
+        supabase
+            .from('tbl_bible_study_handlers')
+            .select('bible_study_id, user_id'),
+        supabase
+            .from('tbl_pastoral_members')
+            .select('user_id, user:tbl_users!tbl_pastoral_members_user_id_fkey(first_name, last_name)')
+            .eq('is_active', 'Y'),
+    ])
+
+    bibleStudies.value = studies ?? []
+
+    const map: Record<number, string[]> = {}
+    for (const h of handlers ?? []) {
+        ;(map[h.bible_study_id] ??= []).push(h.user_id)
+    }
+    bibleStudyHandlers.value = map
+
+    pastors.value = (pastoral ?? [])
+        .map((p: any) => ({
+            user_id: p.user_id,
+            name: `${p.user?.first_name ?? ''} ${p.user?.last_name ?? ''}`.trim() || 'Unnamed',
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name))
+}
+
+function getBibleStudyTitle(id: number | null) {
+    if (!id) return null
+    return bibleStudies.value.find(s => s.id === id)?.title ?? null
+}
+
+function getPastorName(id: string | null) {
+    if (!id) return null
+    return pastors.value.find(p => p.user_id === id)?.name ?? null
 }
 
 async function fetchDefaultEvents() {
@@ -119,7 +179,20 @@ async function stopScanner() {
     scanning.value = false
 }
 
+// The result panel only renders a message when scanSuccess or scanError is set,
+// so anything thrown in between leaves a blank box. Always surface a reason.
 async function onScanSuccess(decodedText: string) {
+    try {
+        await processScan(decodedText)
+    } catch (e: any) {
+        scanError.value = e?.message ?? 'Something went wrong while logging attendance'
+    }
+    if (!scanSuccess.value && !scanError.value) {
+        scanError.value = 'Attendance was not logged — no reason reported'
+    }
+}
+
+async function processScan(decodedText: string) {
     await stopScanner()
     scanResult.value = decodedText
 
@@ -151,6 +224,16 @@ async function onScanSuccess(decodedText: string) {
         scanError.value = 'Please select a program first before scanning a member QR'
         return
     }
+    if (scanLogType.value === 'bible_study') {
+        if (!scanPastorId.value) {
+            scanError.value = 'Please select a pastor first before scanning a member QR'
+            return
+        }
+        if (!scanBibleStudyId.value) {
+            scanError.value = 'Please select a bible study first before scanning a member QR'
+            return
+        }
+    }
 
     // Build attendance log
     const userName = `${auth.user?.first_name ?? ''} ${auth.user?.last_name ?? ''}`.trim()
@@ -167,7 +250,16 @@ async function onScanSuccess(decodedText: string) {
         logged_location_name: auth.profile?.satellite_church_name ?? null,
     }
 
-    if (scanLogType.value === 'program') {
+    if (scanLogType.value === 'bible_study') {
+        title = getBibleStudyTitle(scanBibleStudyId.value)
+        payload.log_type = 'bible_study'
+        payload.bible_study_id = scanBibleStudyId.value
+        payload.bs_pastor_id = scanPastorId.value
+        payload.bs_pastor_name = getPastorName(scanPastorId.value)
+        payload.event_id = null
+        payload.event_title = title
+        payload.program_id = null
+    } else if (scanLogType.value === 'program') {
         title = getProgramName(scanProgramId.value)
         payload.log_type = 'program'
         payload.program_id = scanProgramId.value
@@ -246,6 +338,9 @@ function resetScan() {
     scanError.value = null
     scanSuccess.value = null
 }
+
+// A study picked under one pastor shouldn't linger when the pastor changes.
+watch(scanPastorId, () => { scanBibleStudyId.value = null })
 
 // Load data when scan tab is selected
 watch(activeTab, async (tab) => {
@@ -342,20 +437,18 @@ onBeforeUnmount(() => { stopScanner() })
                                     <label class="block text-xs font-medium text-gray-700 mb-1">Log For</label>
                                     <div class="inline-flex gap-0.5 bg-gray-100/80 rounded-md p-0.5">
                                         <button
+                                            v-for="t in [
+                                                { key: 'event' as const, label: 'Event' },
+                                                { key: 'program' as const, label: 'Program' },
+                                                { key: 'bible_study' as const, label: 'Bible Study' },
+                                            ]"
+                                            :key="t.key"
                                             type="button"
                                             class="px-3 py-1.5 text-xs font-medium rounded transition-all"
-                                            :class="scanLogType === 'event' ? 'bg-white text-navy shadow-sm' : 'text-gray-400 hover:text-gray-600'"
-                                            @click="scanLogType = 'event'"
+                                            :class="scanLogType === t.key ? 'bg-white text-navy shadow-sm' : 'text-gray-400 hover:text-gray-600'"
+                                            @click="scanLogType = t.key"
                                         >
-                                            Event
-                                        </button>
-                                        <button
-                                            type="button"
-                                            class="px-3 py-1.5 text-xs font-medium rounded transition-all"
-                                            :class="scanLogType === 'program' ? 'bg-white text-navy shadow-sm' : 'text-gray-400 hover:text-gray-600'"
-                                            @click="scanLogType = 'program'"
-                                        >
-                                            Program
+                                            {{ t.label }}
                                         </button>
                                     </div>
                                 </div>
@@ -375,7 +468,7 @@ onBeforeUnmount(() => { stopScanner() })
                                 </div>
 
                                 <!-- Program Select -->
-                                <div v-else>
+                                <div v-else-if="scanLogType === 'program'">
                                     <label class="block text-xs font-medium text-gray-700 mb-1">Program</label>
                                     <select
                                         v-model="scanProgramId"
@@ -387,6 +480,38 @@ onBeforeUnmount(() => { stopScanner() })
                                         </option>
                                     </select>
                                 </div>
+
+                                <!-- Bible Study: pastor first, then their study -->
+                                <template v-else>
+                                    <div>
+                                        <label class="block text-xs font-medium text-gray-700 mb-1">Pastor</label>
+                                        <select
+                                            v-model="scanPastorId"
+                                            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-navy/30"
+                                        >
+                                            <option :value="null" disabled>Select pastor</option>
+                                            <option v-for="p in pastors" :key="p.user_id" :value="p.user_id">
+                                                {{ p.name }}
+                                            </option>
+                                        </select>
+                                    </div>
+
+                                    <div>
+                                        <label class="block text-xs font-medium text-gray-700 mb-1">Bible Study</label>
+                                        <select
+                                            v-model="scanBibleStudyId"
+                                            :disabled="!scanPastorId"
+                                            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-navy/30 disabled:bg-gray-50 disabled:text-gray-400"
+                                        >
+                                            <option :value="null" disabled>
+                                                {{ scanPastorId ? 'Select bible study' : 'Select a pastor first' }}
+                                            </option>
+                                            <option v-for="s in bibleStudyOptions" :key="s.id" :value="s.id">
+                                                {{ s.title }}
+                                            </option>
+                                        </select>
+                                    </div>
+                                </template>
 
                                 <p class="text-[11px] text-gray-400 bg-gray-50 rounded-lg px-3 py-2">
                                     Scanning an <strong>Event QR</strong>? Just start the camera — no selection needed. Your attendance will be logged automatically.
