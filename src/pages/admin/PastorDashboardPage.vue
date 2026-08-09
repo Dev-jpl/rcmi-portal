@@ -46,6 +46,15 @@ const activeTab = ref<'network' | 'lpath-leaders' | 'lpath-members' | 'hierarchy
 const loading = ref(true)
 const search = ref('')
 const message = ref<{ type: 'success' | 'error'; text: string } | null>(null)
+type RemoveTarget = {
+    id: number
+    kind: 'network' | 'lpath-leader' | 'lpath-member'
+    label: string
+    user?: { first_name: string | null; last_name: string | null }
+}
+const showRemoveModal = ref(false)
+const removeTarget = ref<RemoveTarget | null>(null)
+const removing = ref(false)
 
 const networkLeaders = ref<NetworkLeader[]>([])
 const lpathLeaders = ref<LpathLeader[]>([])
@@ -245,6 +254,34 @@ function formatDate(d: string | null) {
     return new Date(d).toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
+function openRemove(target: RemoveTarget) {
+    removeTarget.value = target
+    showRemoveModal.value = true
+}
+
+async function handleRemove() {
+    const target = removeTarget.value
+    if (!target) return
+    removing.value = true
+    message.value = null
+
+    const result = target.kind === 'network'
+        ? await supabase.from('tbl_network_leaders').delete().eq('id', target.id)
+        : target.kind === 'lpath-leader'
+            ? await supabase.from('tbl_lpath_leaders').delete().eq('id', target.id)
+            : await supabase.from('tbl_lpath_members').delete().eq('id', target.id)
+
+    if (result.error) {
+        message.value = { type: 'error', text: `Unable to remove ${target.label.toLowerCase()}: ${result.error.message}` }
+    } else {
+        message.value = { type: 'success', text: `${target.label} assignment removed.` }
+        await fetchAll()
+    }
+    removing.value = false
+    showRemoveModal.value = false
+    removeTarget.value = null
+}
+
 function pastorDisplayName(p: PastorOption) {
     return [p.user?.first_name, p.user?.last_name].filter(Boolean).join(' ')
 }
@@ -394,6 +431,7 @@ const tabs = [
                                 <th class="px-4 py-3 hidden lg:table-cell">Church</th>
                                 <th class="px-4 py-3 hidden md:table-cell">Date Started</th>
                                 <th class="px-4 py-3">Status</th>
+                                <th class="px-4 py-3 text-right">Actions</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-100">
@@ -413,6 +451,9 @@ const tabs = [
                                     <span class="inline-flex px-2 py-0.5 rounded-full text-xs font-medium" :class="m.is_active === 'Y' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'">
                                         {{ m.is_active === 'Y' ? 'Active' : 'Inactive' }}
                                     </span>
+                                </td>
+                                <td class="px-4 py-3 text-right">
+                                    <button class="text-red-600 hover:text-red-700 text-sm font-medium" @click="openRemove({ id: m.id, kind: 'network', label: 'Network leader', user: m.user })">Remove</button>
                                 </td>
                             </tr>
                         </tbody>
@@ -435,6 +476,7 @@ const tabs = [
                                 <th class="px-4 py-3 hidden lg:table-cell">Church</th>
                                 <th class="px-4 py-3 hidden md:table-cell">Date Started</th>
                                 <th class="px-4 py-3">Status</th>
+                                <th class="px-4 py-3 text-right">Actions</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-100">
@@ -455,6 +497,9 @@ const tabs = [
                                     <span class="inline-flex px-2 py-0.5 rounded-full text-xs font-medium" :class="m.is_active === 'Y' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'">
                                         {{ m.is_active === 'Y' ? 'Active' : 'Inactive' }}
                                     </span>
+                                </td>
+                                <td class="px-4 py-3 text-right">
+                                    <button class="text-red-600 hover:text-red-700 text-sm font-medium" @click="openRemove({ id: m.id, kind: 'lpath-leader', label: 'L-Path leader', user: m.user })">Remove</button>
                                 </td>
                             </tr>
                         </tbody>
@@ -477,6 +522,7 @@ const tabs = [
                                 <th class="px-4 py-3 hidden lg:table-cell">Network Leader</th>
                                 <th class="px-4 py-3 hidden xl:table-cell">Church</th>
                                 <th class="px-4 py-3">Status</th>
+                                <th class="px-4 py-3 text-right">Actions</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-100">
@@ -497,6 +543,9 @@ const tabs = [
                                     <span class="inline-flex px-2 py-0.5 rounded-full text-xs font-medium" :class="m.is_active === 'Y' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'">
                                         {{ m.is_active === 'Y' ? 'Active' : 'Inactive' }}
                                     </span>
+                                </td>
+                                <td class="px-4 py-3 text-right">
+                                    <button class="text-red-600 hover:text-red-700 text-sm font-medium" @click="openRemove({ id: m.id, kind: 'lpath-member', label: 'L-Path member', user: m.user })">Remove</button>
                                 </td>
                             </tr>
                         </tbody>
@@ -582,6 +631,19 @@ const tabs = [
                     </div>
                 </div>
             </Transition>
+        </Teleport>
+
+        <Teleport to="body">
+            <div v-if="showRemoveModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" @click.self="showRemoveModal = false">
+                <div class="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+                    <h3 class="text-lg font-heading font-bold text-gray-900 mb-2">Remove {{ removeTarget?.label }}</h3>
+                    <p class="text-sm text-gray-600">Remove <strong>{{ displayName(removeTarget?.user) }}</strong> from this leadership assignment? Their member account and profile will remain.</p>
+                    <div class="flex justify-end gap-3 mt-6">
+                        <button class="px-4 py-2 border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50" @click="showRemoveModal = false">Cancel</button>
+                        <button :disabled="removing" class="px-4 py-2 bg-red-600 text-white text-sm font-semibold rounded-lg hover:bg-red-700 disabled:opacity-50" @click="handleRemove">{{ removing ? 'Removing...' : 'Remove' }}</button>
+                    </div>
+                </div>
+            </div>
         </Teleport>
     </div>
 </template>

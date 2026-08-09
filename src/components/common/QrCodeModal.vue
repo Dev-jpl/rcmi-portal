@@ -54,8 +54,22 @@ const bibleStudyOptions = computed(() => {
     return own.length ? own : bibleStudies.value
 })
 
-// Always allow scanning — event QR codes work without pre-selection
-const canStartScan = computed(() => true)
+const canStartScan = computed(() => {
+    if (scanLogType.value === 'event') return scanEventId.value !== null
+    if (scanLogType.value === 'program') return scanProgramId.value !== null
+    return scanPastorId.value !== null && scanBibleStudyId.value !== null
+})
+
+// Scanning logs attendance for someone else, so it's limited to people who
+// serve: admins, leaders, and ministry members. Plain and not-yet-approved
+// members get the "My QR" tab only — they can still be scanned by a leader.
+const canScan = computed(() => auth.isMinistryParticipant)
+
+const tabs = computed<{ key: 'show' | 'scan'; label: string }[]>(() => {
+    const list: { key: 'show' | 'scan'; label: string }[] = [{ key: 'show', label: 'My QR' }]
+    if (canScan.value) list.push({ key: 'scan', label: 'Scan QR' })
+    return list
+})
 
 let scanner: Html5Qrcode | null = null
 let dataLoaded = false
@@ -394,9 +408,9 @@ onBeforeUnmount(() => { stopScanner() })
                         </button>
 
                         <!-- Tabs -->
-                        <div class="inline-flex gap-0.5 bg-gray-100/80 rounded-md p-0.5 mb-5">
+                        <div v-if="tabs.length > 1" class="inline-flex gap-0.5 bg-gray-100/80 rounded-md p-0.5 mb-5">
                             <button
-                                v-for="tab in [{ key: 'show' as const, label: 'My QR' }, { key: 'scan' as const, label: 'Scan QR' }]"
+                                v-for="tab in tabs"
                                 :key="tab.key"
                                 class="px-3 py-1 text-xs font-medium rounded transition-all"
                                 :class="activeTab === tab.key ? 'bg-white text-navy shadow-sm' : 'text-gray-400 hover:text-gray-600'"
@@ -514,7 +528,7 @@ onBeforeUnmount(() => { stopScanner() })
                                 </template>
 
                                 <p class="text-[11px] text-gray-400 bg-gray-50 rounded-lg px-3 py-2">
-                                    Scanning an <strong>Event QR</strong>? Just start the camera — no selection needed. Your attendance will be logged automatically.
+                                    Select where attendance should be recorded to enable the camera.
                                 </p>
 
                                 <!-- Scanner -->
@@ -525,7 +539,7 @@ onBeforeUnmount(() => { stopScanner() })
                                         v-if="!scanning"
                                         :disabled="!canStartScan"
                                         @click="startScanner"
-                                        class="inline-flex items-center gap-2 px-4 py-2 bg-navy text-white text-sm font-semibold rounded-lg hover:bg-navy-700 disabled:opacity-50 transition-colors"
+                                        class="inline-flex items-center gap-2 px-4 py-2 bg-navy text-white text-sm font-semibold rounded-lg hover:bg-navy-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                                     >
                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />

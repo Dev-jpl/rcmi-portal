@@ -53,6 +53,9 @@ const showModal = ref(false)
 const editingId = ref<number | null>(null)
 const message = ref<{ type: 'success' | 'error'; text: string } | null>(null)
 const saving = ref(false)
+const showRemoveModal = ref(false)
+const removeTarget = ref<LpathLeader | null>(null)
+const removing = ref(false)
 
 const form = ref({
   user_id: '',
@@ -277,6 +280,33 @@ async function toggleActive(m: LpathLeader) {
   await fetchLeaders()
 }
 
+function openRemove(m: LpathLeader) {
+  removeTarget.value = m
+  showRemoveModal.value = true
+}
+
+async function handleRemove() {
+  if (!removeTarget.value) return
+  removing.value = true
+  message.value = null
+
+  const { error } = await supabase
+    .from('tbl_lpath_leaders')
+    .delete()
+    .eq('id', removeTarget.value.id)
+
+  if (error) {
+    message.value = { type: 'error', text: `Unable to remove L-Path leader: ${error.message}` }
+  } else {
+    message.value = { type: 'success', text: 'L-Path leader assignment removed.' }
+    await fetchLeaders()
+  }
+
+  removing.value = false
+  showRemoveModal.value = false
+  removeTarget.value = null
+}
+
 function formatDate(d: string | null) {
   if (!d) return '—'
   return new Date(d).toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric' })
@@ -422,7 +452,7 @@ function churchName(churchId: number | null) {
                   Edit
                 </button>
                 <button
-                  class="text-sm font-medium"
+                  class="text-sm font-medium mr-3"
                   :class="
                     m.is_active === 'Y'
                       ? 'text-red-500 hover:text-red-600'
@@ -431,6 +461,12 @@ function churchName(churchId: number | null) {
                   @click="toggleActive(m)"
                 >
                   {{ m.is_active === 'Y' ? 'Deactivate' : 'Activate' }}
+                </button>
+                <button
+                  class="text-red-600 hover:text-red-700 text-sm font-medium"
+                  @click="openRemove(m)"
+                >
+                  Remove
                 </button>
               </td>
             </tr>
@@ -594,6 +630,27 @@ function churchName(churchId: number | null) {
               @click="handleSave"
             >
               {{ saving ? 'Saving...' : editingId ? 'Update' : 'Add' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <Teleport to="body">
+      <div
+        v-if="showRemoveModal"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+        @click.self="showRemoveModal = false"
+      >
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+          <h3 class="text-lg font-heading font-bold text-gray-900 mb-2">Remove L-Path Leader</h3>
+          <p class="text-sm text-gray-600">
+            Remove <strong>{{ userName(removeTarget?.user) }}</strong> as an L-Path leader? Their member account and profile will remain.
+          </p>
+          <div class="flex justify-end gap-3 mt-6">
+            <button class="px-4 py-2 border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50" @click="showRemoveModal = false">Cancel</button>
+            <button :disabled="removing" class="px-4 py-2 bg-red-600 text-white text-sm font-semibold rounded-lg hover:bg-red-700 disabled:opacity-50" @click="handleRemove">
+              {{ removing ? 'Removing...' : 'Remove' }}
             </button>
           </div>
         </div>
