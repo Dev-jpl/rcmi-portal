@@ -60,17 +60,6 @@ const canStartScan = computed(() => {
     return scanPastorId.value !== null && scanBibleStudyId.value !== null
 })
 
-// Scanning logs attendance for someone else, so it's limited to people who
-// serve: admins, leaders, and ministry members. Plain and not-yet-approved
-// members get the "My QR" tab only — they can still be scanned by a leader.
-const canScan = computed(() => auth.isMinistryParticipant)
-
-const tabs = computed<{ key: 'show' | 'scan'; label: string }[]>(() => {
-    const list: { key: 'show' | 'scan'; label: string }[] = [{ key: 'show', label: 'My QR' }]
-    if (canScan.value) list.push({ key: 'scan', label: 'Scan QR' })
-    return list
-})
-
 let scanner: Html5Qrcode | null = null
 let dataLoaded = false
 
@@ -408,9 +397,9 @@ onBeforeUnmount(() => { stopScanner() })
                         </button>
 
                         <!-- Tabs -->
-                        <div v-if="tabs.length > 1" class="inline-flex gap-0.5 bg-gray-100/80 rounded-md p-0.5 mb-5">
+                        <div class="inline-flex gap-0.5 bg-gray-100/80 rounded-md p-0.5 mb-5">
                             <button
-                                v-for="tab in tabs"
+                                v-for="tab in [{ key: 'show' as const, label: 'My QR' }, { key: 'scan' as const, label: 'Scan QR' }]"
                                 :key="tab.key"
                                 class="px-3 py-1 text-xs font-medium rounded transition-all"
                                 :class="activeTab === tab.key ? 'bg-white text-navy shadow-sm' : 'text-gray-400 hover:text-gray-600'"
